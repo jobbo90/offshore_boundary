@@ -1,13 +1,15 @@
 # # library(plyr)
 # # library(ggridges)
-# library(ggplot2)
+library(ggplot2)
+library(readr)
 # library(tidyverse)
 # library(dplyr)
 # library(reshape2)
-# library(stringr)
-# 
-# library(rgdal)  # for reading/creating shapefiles
-# library(raster) # for stack & reading raster
+library(stringr)
+library(sp)
+library(rgdal)  # for reading/creating shapefiles
+library(raster) # for stack & reading raster
+library(qdapRegex)
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)
@@ -21,3 +23,4 @@
 # library(egg) # for tagging facets
 # library( rasterVis ) # for gPlot
 # library( gridExtra )
+
