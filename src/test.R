@@ -38,10 +38,15 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 source("./src/packages.R")       # loads up all the packages we need
 
 ## ---------------------------
-source("./src/functions.R")
+# source("./src/functions.R")
 
 ## ---------------------------
 
 dataFolder <- './data/raw'
 
-# transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
+transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
+
+# select folders
+folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.names = T))
+# metaMatrix <- as.matrix(list.files(folderSelect, pattern=".csv", full.names = T))
+df <- rewrite(folderSelect)
