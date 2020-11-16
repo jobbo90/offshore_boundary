@@ -38,7 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 source("./src/packages.R")       # loads up all the packages we need
 
 ## ---------------------------
-# source("./src/functions.R")
+# source("./src/functions.R") 
 
 ## ---------------------------
 
