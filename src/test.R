@@ -24,7 +24,7 @@ rm(list = ls())
 #' set working directory for Mac and PC
 wd<-getwd()
 
-setwd("D:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
+setwd("I:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
 
 
 ## ---------------------------
@@ -70,6 +70,7 @@ lines <- vector('list', length(uniqueX))
 allPoints <- vector('list', length(csv))
 
 for (n in 1:length(uniqueX)){
+  #n<-1
   coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
   all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
   
