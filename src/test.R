@@ -32,6 +32,9 @@ options(scipen = 6, digits = 4) # I prefer to view outputs in non-scientific not
 memory.limit(30000000)     # this is needed on some PCs to increase memory allowance, but has no impact on macs.
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 
+#  Map view options:
+# https://r-spatial.github.io/mapview/articles/articles/mapview_02-advanced.html
+
 ## ---------------------------
 
 #' load up the packages 
@@ -161,6 +164,14 @@ SpatialOffShore_sf <- st_as_sf(SpatialOffShore)
 # SpatialOffShore <- SpatialPoints(offShorePoints, proj4string= CRS("+proj=longlat +datum=WGS84"))
 
 mapview(SpatialOffShore_sf,xcol = "x", ycol = "y",  zcol = "DATE_ACQUIRED") + mapview(lines_sf)
+
+# calculate mean position (per variable time-step)
+
+# apply filters:
+# remove points of which neighbouring points (or two neighboring points?) are to far away (cross + along shore)
+# remove points that are on-shore
+
+
 
 
 
