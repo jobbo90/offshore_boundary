@@ -23,8 +23,7 @@
 rm(list = ls())
 #' set working directory for Mac and PC
 wd<-getwd()
-
-setwd("I:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
+# setwd("I:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
 
 
 ## ---------------------------
@@ -52,7 +51,7 @@ folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.na
 
 df <- rewrite(folderSelect)
 
-csv = as.matrix(read.csv2(as.character(df[3,1]), 
+csv = as.matrix(read.csv2(as.character(df[2,1]), 
                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
 dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
 coastDist <- col_of_interest(csv, 'coastDist$')
@@ -61,6 +60,7 @@ coastDist <- col_of_interest(csv, 'coastDist$')
 uniqueDates <- unique(csv[,dates])
 
 # all unique transect (id's)
+pos <- unique(csv[, col_of_interest(csv, 'pos$')])
 uniqueX<- unique(csv[, col_of_interest(csv, 'originX$')])
 uniqueY<- unique(csv[, col_of_interest(csv, 'originY$')])
 geo<- unique(csv[, col_of_interest(csv, '.geo')])
@@ -69,8 +69,17 @@ lines <- vector('list', length(uniqueX))
 
 allPoints <- vector('list', length(csv))
 
+
+df_coastDist = data.frame(matrix(NA, length(uniqueX), length(uniqueDates)),
+                stringsAsFactors=F)
+
+colnames(df_coastDist) <- c(uniqueDates)
+
 for (n in 1:length(uniqueX)){
-  #n<-1
+  #n<-102
+  
+  
+  # Coordinates of transects
   coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
   all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
   
@@ -80,58 +89,77 @@ for (n in 1:length(uniqueX)){
   end_coords <- data.frame(lon = as.numeric(all_digits[3]),
                            lat = as.numeric(all_digits[4]))  
   x <- as.matrix(rbind(begin_coords, end_coords))
+  lines[[n]] <- Lines(list(Line(x)), ID = n)  # create line feature
   
-  lines[[n]] <- Lines(list(Line(x)), ID = n)
-  
+  # only return observations if coastDist >= 0 and if coordinates
   test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n] 
                           & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
-  # lines_sf <- SpatialLines(lines)
+  
+  
+  subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$')))]
+  
+  if(is.null(nrow(subset))){
+    df_coastDist[n,] <- rep(NA, length(uniqueDates))
+    
+  } else {
+    mathcingDates <- match(colnames(df_coastDist), subset[ ,col_of_interest(subset, 'DATE_ACQUIRED')]) 
+    
+    df_coastDist[n,mathcingDates[!is.na(c(mathcingDates))]] <- subset[,col_of_interest(subset, 'coastDist$')]
+    }
+  
+  # 
+  # 
+  # coordiates of coastline points
   coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, 'coastX$')]),
                        y = as.numeric(test1transect[,col_of_interest(csv, 'coastY$')]))
-  allPoints <- rbind(allPoints, coords)
   
-
+  allPoints <- rbind(allPoints, coords)
   
 }
 
-points <- SpatialPoints(allPoints, proj4string=CRS(as.character(NA)))
-lines_sf <- SpatialLines(lines)
-plot(lines_sf)
+points <- SpatialPoints(allPoints, proj4string=CRS("+proj=longlat +datum=WGS84"))
+AllLines <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
+df <- SpatialLinesDataFrame(AllLines,data.frame(df_coastDist))
 
-plot(points, add = T, col = 'red')
+# change format of lines
+lines_sf <- st_as_sf(df)
+points_sf <- st_as_sf(points)
 
-# str_match(as.character(geo[1]), ":[\\s*(.*?)\\s*]}")
-# coords <- qdapRegex::ex_between(as.character(geo[1]), ":[", "]}")[[1]]
-# all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
-# 
-# 
-# begin_coords <- data.frame(lon = as.numeric(all_digits[1]),
-#                            lat = as.numeric(all_digits[2]))
-# 
-# # Coordinates on the original line
-# end_coords <- data.frame(lon = as.numeric(all_digits[3]),
-#                          lat = as.numeric(all_digits[4]))  
-# 
-# x <- as.matrix(rbind(begin_coords, end_coords))
-# 
-# n = 1
-# lines <- vector('list', n) #length(uniqueX)
-# 
-# lines[[n]] <- Lines(list(Line(x)), ID = n)
-# lines_sf <- SpatialLines(lines) #, proj4string = CRS(as.character(line@proj4string))
+# mapview(breweries, popup = popupTable(breweries, zcol = c('founded', 'number.of.types'))) 
+
+mapview(lines_sf,xcol = "x", ycol = "y", popup = popupTable(lines_sf)) + mapview(points_sf)
+
+spplot(map, zcol = 1, zoom = 6, 
+       colorkey = FALSE, scales = list(draw = TRUE))
+
 # plot(lines_sf)
 # 
-# test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[1] 
-#                         & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
-# 
-# # maxCoastDist <- test1transect[max(test1transect[,col_of_interest(csv, 'coastDist$')]),]
-# # setting coastDist > 0 also excludes observations when transect is not sufficient landward
-# 
-# testMax <- test1transect[which.max(test1transect[,6]),]
-# 
-# # plot(as.Date(test1transect[,3]), test1transect[,6])
-# 
-# coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, 'coastX$')]),
-#                     y = as.numeric(test1transect[,col_of_interest(csv, 'coastY$')]))
-# points <- SpatialPoints(coords, proj4string=CRS(as.character(NA)))
 # plot(points, add = T, col = 'red')
+
+
+offShorePoints <- vector('list', length(csv))
+
+# off-shore points for selected images
+for (q in 1:length(uniqueDates)){
+  q <- 6
+  
+  # select all rows that have an acquisition date 
+  date <- uniqueDates[q]
+  csv_subset <- subset(csv,csv[,col_of_interest(csv, 'DATE_ACQUIRED$')]== date) 
+  
+  coordsOffShore <- data.frame(x = as.numeric(csv_subset[,col_of_interest(csv_subset, 'peakCoordX$')]),
+                       y = as.numeric(csv_subset[,col_of_interest(csv_subset, 'peakCoordY$')]), 
+                       pos = as.numeric(csv_subset[,col_of_interest(csv_subset, 'pos$')]))
+  
+  offShorePoints <- rbind(offShorePoints, coordsOffShore)
+  
+}
+
+
+mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE")) 
+SpatialOffShore <- SpatialPoints(offShorePoints, proj4string= CRS("+proj=longlat +datum=WGS84"))
+
+mapview(SpatialOffShore,xcol = "x", ycol = "y", crs = 4326) + lines_sf
+
+
+

@@ -2,6 +2,8 @@
 # # library(ggridges)
 library(ggplot2)
 library(readr)
+library(mapview)
+library(leafpop)
 # library(tidyverse)
 # library(dplyr)
 # library(reshape2)
@@ -10,6 +12,7 @@ library(sp)
 library(rgdal)  # for reading/creating shapefiles
 library(raster) # for stack & reading raster
 library(qdapRegex)
+library(sf)
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)
