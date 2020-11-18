@@ -30,6 +30,7 @@ wd<-getwd()
 
 options(scipen = 6, digits = 4) # I prefer to view outputs in non-scientific notation
 memory.limit(30000000)     # this is needed on some PCs to increase memory allowance, but has no impact on macs.
+mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 
 ## ---------------------------
 
@@ -49,7 +50,7 @@ dataFolder <- './data/raw'
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.names = T))
 # metaMatrix <- as.matrix(list.files(folderSelect, pattern=".csv", full.names = T))
 
-df <- rewrite(folderSelect)
+df <- rewrite(folderSelect);
 
 csv = as.matrix(read.csv2(as.character(df[2,1]), 
                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
@@ -57,22 +58,19 @@ dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
 coastDist <- col_of_interest(csv, 'coastDist$')
 
 # all unique dates
-uniqueDates <- unique(csv[,dates])
+uniqueDates <- unique(csv[,dates]);
 
 # all unique transect (id's)
-pos <- unique(csv[, col_of_interest(csv, 'pos$')])
-uniqueX<- unique(csv[, col_of_interest(csv, 'originX$')])
-uniqueY<- unique(csv[, col_of_interest(csv, 'originY$')])
-geo<- unique(csv[, col_of_interest(csv, '.geo')])
+pos <- unique(csv[, col_of_interest(csv, 'pos$')]);
+uniqueX<- unique(csv[, col_of_interest(csv, 'originX$')]);
+uniqueY<- unique(csv[, col_of_interest(csv, 'originY$')]);
+geo<- unique(csv[, col_of_interest(csv, '.geo')]);
 
-lines <- vector('list', length(uniqueX))
-
-allPoints <- vector('list', length(csv))
-
-
+# define output matrices
+lines <- vector('list', length(uniqueX));
+allPoints <- vector('list', length(csv));
 df_coastDist = data.frame(matrix(NA, length(uniqueX), length(uniqueDates)),
                 stringsAsFactors=F)
-
 colnames(df_coastDist) <- c(uniqueDates)
 
 for (n in 1:length(uniqueX)){
@@ -111,13 +109,17 @@ for (n in 1:length(uniqueX)){
   # 
   # coordiates of coastline points
   coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, 'coastX$')]),
-                       y = as.numeric(test1transect[,col_of_interest(csv, 'coastY$')]))
+                       y = as.numeric(test1transect[,col_of_interest(csv, 'coastY$')]),
+                       DATE_ACQUIRED = as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')]))
   
   allPoints <- rbind(allPoints, coords)
   
 }
 
-points <- SpatialPoints(allPoints, proj4string=CRS("+proj=longlat +datum=WGS84"))
+points <- SpatialPointsDataFrame(data.frame(allPoints[,'x'], allPoints[,'y'] ), 
+                                 data = data.frame(allPoints[,'DATE_ACQUIRED']),
+                                 proj4string=CRS("+proj=longlat +datum=WGS84"))
+colnames(points@data) <- c("DATE_ACQUIRED")
 AllLines <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
 df <- SpatialLinesDataFrame(AllLines,data.frame(df_coastDist))
 
@@ -127,14 +129,14 @@ points_sf <- st_as_sf(points)
 
 # mapview(breweries, popup = popupTable(breweries, zcol = c('founded', 'number.of.types'))) 
 
-mapview(lines_sf,xcol = "x", ycol = "y", popup = popupTable(lines_sf)) + mapview(points_sf)
+mapview(lines_sf,xcol = "x", ycol = "y") + mapview(points_sf, zcol = "DATE_ACQUIRED")
 
 
 offShorePoints <- vector('list', length(csv))
 
 # off-shore points for selected images
 for (q in 1:length(uniqueDates)){
-  q <- 6
+  # q <- 6
   
   # select all rows that have an acquisition date 
   date <- uniqueDates[q]
@@ -142,17 +144,23 @@ for (q in 1:length(uniqueDates)){
   
   coordsOffShore <- data.frame(x = as.numeric(csv_subset[,col_of_interest(csv_subset, 'peakCoordX$')]),
                        y = as.numeric(csv_subset[,col_of_interest(csv_subset, 'peakCoordY$')]), 
-                       pos = as.numeric(csv_subset[,col_of_interest(csv_subset, 'pos$')]))
+                       pos = as.numeric(csv_subset[,col_of_interest(csv_subset, 'pos$')]),
+                       DATE_ACQUIRED = as.character(date))
   
   offShorePoints <- rbind(offShorePoints, coordsOffShore)
   
 }
 
 
-mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE")) 
-SpatialOffShore <- SpatialPoints(offShorePoints, proj4string= CRS("+proj=longlat +datum=WGS84"))
 
-mapview(SpatialOffShore,xcol = "x", ycol = "y", crs = 4326) + lines_sf
+SpatialOffShore <- SpatialPointsDataFrame(data.frame(offShorePoints[,'x'], offShorePoints[,'y'] ), 
+                                 data = data.frame(offShorePoints[,'pos'], offShorePoints[,'DATE_ACQUIRED']),
+                                 proj4string=CRS("+proj=longlat +datum=WGS84"))
+colnames(SpatialOffShore@data) <- c("pos","DATE_ACQUIRED")
+SpatialOffShore_sf <- st_as_sf(SpatialOffShore)
+# SpatialOffShore <- SpatialPoints(offShorePoints, proj4string= CRS("+proj=longlat +datum=WGS84"))
+
+mapview(SpatialOffShore_sf,xcol = "x", ycol = "y",  zcol = "DATE_ACQUIRED") + mapview(lines_sf)
 
 
 
