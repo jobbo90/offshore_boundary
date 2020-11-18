@@ -129,13 +129,6 @@ points_sf <- st_as_sf(points)
 
 mapview(lines_sf,xcol = "x", ycol = "y", popup = popupTable(lines_sf)) + mapview(points_sf)
 
-spplot(map, zcol = 1, zoom = 6, 
-       colorkey = FALSE, scales = list(draw = TRUE))
-
-# plot(lines_sf)
-# 
-# plot(points, add = T, col = 'red')
-
 
 offShorePoints <- vector('list', length(csv))
 
