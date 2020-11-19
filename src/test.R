@@ -104,6 +104,8 @@ for (n in 1:length(uniqueX)){
   if(is.null(nrow(subset))){
     df_coastDist[n,] <- c(as.numeric(subset[3]), rep(NA, length(uniqueDates)))
     
+    # THIS THROWS ERROR LATER ON WHEN THERE IS NOTHING IN SUBSET ALSO NO POS IS ASSIGNED TO THE TRANSECT DATABASE!
+    
   } else {
     # at the correct location in df_coastDist append the offshore location of mudbank boundary
     mathcingDates <- match(subset[ ,col_of_interest(subset, 'DATE_ACQUIRED')], colnames(df_coastDist)) 
@@ -139,8 +141,6 @@ df <- SpatialLinesDataFrame(AllLines,data.frame(df_coastDist))
 # change format of lines
 lines_sf <- st_as_sf(df)
 points_sf <- st_as_sf(points)
-
-# mapview(breweries, popup = popupTable(breweries, zcol = c('founded', 'number.of.types'))) 
 
 mapview(lines_sf,xcol = "x", ycol = "y") + mapview(points_sf, zcol = c("DATE_ACQUIRED"))
 
@@ -200,13 +200,13 @@ colnames(SpatialOffShore@data) <- c("pos","DATE_ACQUIRED")
 SpatialOffShore_sf <- st_as_sf(SpatialOffShore)
 # SpatialOffShore <- SpatialPoints(offShorePoints, proj4string= CRS("+proj=longlat +datum=WGS84"))
 
-mapview(SpatialOffShore_sf,xcol = "x", ycol = "y") + mapview(lines_sf)
+mapview(SpatialOffShore_sf,xcol = "x", ycol = "y",  zcol = c("DATE_ACQUIRED")) + mapview(lines_sf)
 
 # average position per tansect
-
+allAveragePoints <- vector('list', length(SpatialtestYearly@data$pos));
 for (x in 1:length(SpatialtestYearly@data$pos)){
   
-  x<-1
+  # x<-1
   alongshorePosition <- SpatialtestYearly@data$pos[x]
   
   transectObs = subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'pos')] == alongshorePosition)
@@ -215,11 +215,41 @@ for (x in 1:length(SpatialtestYearly@data$pos)){
   
   # translate distances along transect
   # get corresponding transect (matching pos)
+  selectedTransect <- df[df$pos == alongshorePosition, ]
+  # mapview(st_as_sf(selectedTransect))
   
+  # get coordinates at meanDistance away from origin
+  # change to meters
+  selectedTransect <- spTransform(selectedTransect, CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+  lineCoords <- coordinates(selectedTransect)[[1]][[1]]
+  
+  # theta <- atan2(pos$ynext-pos$yprev, pos$xnext-pos$xprev)
+  # # Angle between points on the line in radians (y1- y0, x1-x0)
+  theta <- atan2(lineCoords[1]-lineCoords[2], lineCoords[3]-lineCoords[4])   #?
+  thetaT <- theta+pi/2
+  
+  dx_poi <- meanAxisDist*cos(thetaT)      # coordinates of point of interest as defined by position length (sep)
+  dy_poi <- meanAxisDist*sin(thetaT)
+  
+  xnew = lineCoords[1] - dx_poi
+  ynew = lineCoords[3] - dy_poi
+  
+  newPoint <- spTransform(SpatialPoints(data.frame(x = xnew, y = ynew),CRS(as.character(selectedTransect@proj4string))),
+                          CRS("+proj=longlat +datum=WGS84"))
+  
+  allAveragePoints <- rbind(allAveragePoints, data.frame(x=newPoint@coords[1], y = newPoint@coords[2],
+                            pos = alongshorePosition,
+                            meanAxisDist = meanAxisDist))
+  
+  # mapview(st_as_sf(selectedTransect)) +mapview(newPoint)
   
 }
 
-
+meaOffShore <- SpatialPointsDataFrame(data.frame(allAveragePoints[,'x'], allAveragePoints[,'y'] ), 
+                                          data = data.frame(allAveragePoints[,'pos'], allAveragePoints[,'meanAxisDist']),
+                                          proj4string=CRS("+proj=longlat +datum=WGS84"))
+st_meaOffShore <- st_as_sf(meaOffShore)
+mapview(st_meaOffShore,xcol = "x", ycol = "y", col.regions = c("red")) + mapview(lines_sf) + mapview(SpatialOffShore_sf,xcol = "x", ycol = "y",  zcol = c("DATE_ACQUIRED"))
 # apply filters:
 # remove points of which neighbouring points (or two neighboring points?) are to far away (cross + along shore)
 # remove points that are on-shore
