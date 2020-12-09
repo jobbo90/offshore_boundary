@@ -71,13 +71,18 @@ df <- df[grep('.csv', folderSelect, ignore.case = T),]
 # }
 
 # strings to compare
-set1 <- 'Suriname_229_56_2009_till_2009_testImage2009115'
-set2 <- 'Suriname_229_56_2009_till_2009_testImage2009115_extraMask'
-# set3 <- 'Suriname_229_56_2009_till_2009_testImage2009115_extraMask'
+# set1 <- 'Suriname_229_56_2009_till_2009_testImage2009115'
+# set2 <- 'Suriname_229_56_2009_till_2009_testImage2009115_extraMask'
+set1 <- 'Suriname_229_56_2009_till_2009_testImage20091115_extraMask_V20201207'
+set2 <- '/Suriname_229_56_2009_till_2009_testImage20091115_extraMask_largestDrop'
 
-csv1 = as.matrix(read.csv2(as.character(df[grep(set1, df, ignore.case = T),1]),
+# set1 <- '/Suriname_229_56_2009_till_2009_testImage20090912_extraMask_largestDrop'
+# set2 <- 'Suriname_229_56_2009_till_2009_testImage20090912_extraMask_V20201207'
+
+
+csv1 = as.matrix(read.csv2(as.character(df[grep(set1, folderSelect, ignore.case = T),1]),
                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
-csv2 = as.matrix(read.csv2(as.character(df[grep(set2, df, ignore.case = T),1]),
+csv2 = as.matrix(read.csv2(as.character(df[grep(set2, folderSelect, ignore.case = T),1]),
                            header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
 
 # mydata <- sapply(list.files(paste0(dataFolder, '/GEE_exports/testImages'), full.names = T), read.csv)
@@ -94,8 +99,17 @@ lines1 <- reshape_csvLines(csv1)
 lines_sf <- st_as_sf(lines1)
 
 
-mapview(pointsLand2,col.regions = c("blue")) + mapview(points1, col.regions = c("red")) + mapview(points2, col.regions = c("green"))
+mapview(pointsLand2,col.regions = c("blue")) + mapview(points1, col.regions = c("red")) + mapview(points2, col.regions = c("green")) + 
+  mapview(lines_sf,xcol = "x", ycol = "y") 
 
+
+
+# overlay with the image of interest?
+# remotes::install_github("r-spatial/rgee") 
+
+#  cannot remove jsonlite package (remove.packages("jsonlite"))
+
+#2D plotting
 # order on column names
 df_coastDist <- df_coastDist[,order(names(df_coastDist))]
 

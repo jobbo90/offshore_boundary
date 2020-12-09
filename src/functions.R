@@ -2,6 +2,16 @@ multiply <- function(x,y){
   return(x*y)
 }
 
+# detect string to to_keep 
+to_keep <- function(fixed_string, text) {
+  #' @title string to keep
+  #' @description detect string in text
+  #' @param fixed_string the pattern to match
+  #' @param text the text to search in
+  #' @return string to keep
+  return(stringr::str_detect(text, stringr::fixed(fixed_string, ignore_case = TRUE)))
+}
+
 
 # Rewrite table
 rewrite <- function(txt){
