@@ -55,7 +55,20 @@ mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "Open
 
 df <- rewrite(folderSelect);
 
-csv = as.matrix(read.csv2(as.character(df[2,1]), 
+# only csv's
+df <- df[grep('.csv', folderSelect, ignore.case = T),][1:2,]
+
+# csv <- data.frame(matrix(NA, 0, 18),
+#            stringsAsFactors=F)
+# 
+# for (q in nrow(df)){
+#   # q = 2
+#   csv <- rbind(csv, as.matrix(read.csv2(as.character(df[q,1]), 
+#                       header = T, sep = ',', na.strings=c("","NA"))))
+#   
+# }
+
+csv = as.matrix(read.csv2(as.character(df[2,1]),
                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
 dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
 coastDist <- col_of_interest(csv, 'coastDist$')
@@ -79,7 +92,6 @@ colnames(df_coastDist) <- c('pos', uniqueDates)
 for (n in 1:length(uniqueX)){
   #n<-103
   
-  
   # Coordinates of transects
   coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
   all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
@@ -96,14 +108,13 @@ for (n in 1:length(uniqueX)){
   test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n] 
                           & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
   
-  
   subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$'),
                                   col_of_interest(csv, 'pos$')))]
   
   # construct a data frame that matches the lines
   if(is.null(nrow(subset))){
     df_coastDist[n,] <- c(as.numeric(subset[3]), rep(NA, length(uniqueDates)))
-    
+
     # THIS THROWS ERROR LATER ON WHEN THERE IS NOTHING IN SUBSET ALSO NO POS IS ASSIGNED TO THE TRANSECT DATABASE!
     
   } else {
@@ -117,9 +128,7 @@ for (n in 1:length(uniqueX)){
     df_coastDist[n,mathcingDates[!is.na(c(mathcingDates))]] <- subset[,col_of_interest(subset, 'coastDist$')]
 
     }
-  
-  # 
-  # 
+
   # coordiates of coastline points
   coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, 'coastX$')]),
                        y = as.numeric(test1transect[,col_of_interest(csv, 'coastY$')]),
@@ -136,17 +145,26 @@ points <- SpatialPointsDataFrame(data.frame(allPoints[,'x'], allPoints[,'y'] ),
                                  proj4string=CRS("+proj=longlat +datum=WGS84"))
 # colnames(points@data) <- c("DATE_ACQUIRED")
 AllLines <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
-df <- SpatialLinesDataFrame(AllLines,data.frame(df_coastDist))
+sp_Lines_df <- SpatialLinesDataFrame(AllLines,data.frame(df_coastDist))
 
 # change format of lines
-lines_sf <- st_as_sf(df)
+lines_sf <- st_as_sf(sp_Lines_df)
 points_sf <- st_as_sf(points)
 
 mapview(lines_sf,xcol = "x", ycol = "y") + mapview(points_sf, zcol = c("DATE_ACQUIRED"))
 
+# order on column names
+df_coastDist <- df_coastDist[,order(names(df_coastDist))]
+
+plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), c(1:length(2:ncol(df_coastDist))))
+
+plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), df_coastDist[1,1:ncol(df_coastDist)-1])
+clicked <- identify(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]),
+                    df_coastDist[1,1:ncol(df_coastDist)-1], 
+                    n=1, labels=colnames(df_coastDist)[1:ncol(df_coastDist)-1])
+
 
 offShorePoints <- vector('list', length(csv))
-
 # off-shore points for selected images
 for (q in 1:length(uniqueDates)){
   # q <- 6
@@ -170,7 +188,7 @@ for (q in 1:length(uniqueDates)){
 offShorePoints <- subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'x')] != -1)
 
 # Example per time step
-date_to_test <- c('2019-02-28')
+date_to_test <- c('2019-09-16')
 testYearly <- subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'DATE_ACQUIRED')] == date_to_test)
 
 testYearlyCoastline <- subset(allPoints, allPoints[,col_of_interest(allPoints, 'DATE_ACQUIRED')] == date_to_test)
@@ -191,7 +209,6 @@ mapview(SpatialtestYearly, xcol = "x", ycol = "y")  +
         mapview(Spatial_testYearlyCoastline, xcol = "x", ycol = "y", col.regions = c("red"))
 
 
-
 # create a spatialData Frame (for interactive plotting)
 SpatialOffShore <- SpatialPointsDataFrame(data.frame(offShorePoints[,'x'], offShorePoints[,'y'] ), 
                                           data = data.frame(offShorePoints[,'pos'], offShorePoints[,'DATE_ACQUIRED']),
@@ -206,7 +223,7 @@ mapview(SpatialOffShore_sf,xcol = "x", ycol = "y",  zcol = c("DATE_ACQUIRED")) +
 allAveragePoints <- vector('list', length(SpatialtestYearly@data$pos));
 for (x in 1:length(SpatialtestYearly@data$pos)){
   
-  # x<-1
+  # x<-113
   alongshorePosition <- SpatialtestYearly@data$pos[x]
   
   transectObs = subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'pos')] == alongshorePosition)
@@ -215,7 +232,7 @@ for (x in 1:length(SpatialtestYearly@data$pos)){
   
   # translate distances along transect
   # get corresponding transect (matching pos)
-  selectedTransect <- df[df$pos == alongshorePosition, ]
+  selectedTransect <- sp_Lines_df[sp_Lines_df$pos == alongshorePosition, ]
   # mapview(st_as_sf(selectedTransect))
   
   # get coordinates at meanDistance away from origin
