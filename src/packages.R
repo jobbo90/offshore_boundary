@@ -1,5 +1,7 @@
 # # library(plyr)
 # # library(ggridges)
+# remotes::install_github("r-spatial/rgee")
+library(rgee)
 library(ggplot2)
 library(readr)
 library(mapview)
@@ -13,6 +15,9 @@ library(rgdal)  # for reading/creating shapefiles
 library(raster) # for stack & reading raster
 library(qdapRegex)
 library(sf)
+library(jsonlite) # required for mapView
+library(zoo)
+library(EnvStats) # for rosnerTest
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)

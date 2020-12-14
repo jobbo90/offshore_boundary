@@ -78,9 +78,9 @@ reshape_csvPoints <- function(csv, patternX, patternY){
                              lat = as.numeric(all_digits[4]))  
     x <- as.matrix(rbind(begin_coords, end_coords))
 
-    # only return observations if coastDist >= 0 and if coordinates
+    # only return observations if patternX >= 0 and if coordinates
     test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n] 
-                            & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
+                            & csv[,col_of_interest(csv, paste( '^', patternX, sep = ''))] != -1 )
     
     subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$'),
                                     col_of_interest(csv, 'pos$')))]

@@ -73,17 +73,31 @@ df <- df[grep('.csv', folderSelect, ignore.case = T),]
 # strings to compare
 # set1 <- 'Suriname_229_56_2009_till_2009_testImage2009115'
 # set2 <- 'Suriname_229_56_2009_till_2009_testImage2009115_extraMask'
-set1 <- 'Suriname_229_56_2009_till_2009_testImage20091115_extraMask_V20201207'
-set2 <- '/Suriname_229_56_2009_till_2009_testImage20091115_extraMask_largestDrop'
+# set1 <- 'Suriname_229_56_2009_till_2009_testImage20091115_extraMask_V20201207'
+# set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_extraMask_largestDrop'
 
-# set1 <- '/Suriname_229_56_2009_till_2009_testImage20090912_extraMask_largestDrop'
-# set2 <- 'Suriname_229_56_2009_till_2009_testImage20090912_extraMask_V20201207'
+# largest, relative and slope drop for 20091115 image
+# set1 <- 'Suriname_229_56_2009_till_2009_testImage20091115_largestDrop_20201210'
+# set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201210'
+# set3 <- 'Suriname_229_56_2009_till_2009_testImage20091115_slopeDrop_20201210'
+
+
+# largest, relative and slope drop for 20091115 image
+set1 <- 'Suriname_229_56_2009_till_2009_testImage20090912_largestDrop_20201210'
+# set2 <- 'Suriname_229_56_2009_till_2009_testImage20090912_relativeDrop_20201210'
+# set3 <- 'Suriname_229_56_2009_till_2009_testImage20090912_slopeDrop_20201210'
+
+set3 <- '/Suriname_229_56_2009_till_2009_testImage20090912_extraMask_largestDrop'
+set2 <- 'Suriname_229_56_2009_till_2009_testImage20090912_extraMask_V20201207'
 
 
 csv1 = as.matrix(read.csv2(as.character(df[grep(set1, folderSelect, ignore.case = T),1]),
                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
 csv2 = as.matrix(read.csv2(as.character(df[grep(set2, folderSelect, ignore.case = T),1]),
                            header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
+csv3 = as.matrix(read.csv2(as.character(df[grep(set3, folderSelect, ignore.case = T),1]),
+                           header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
+
 
 # mydata <- sapply(list.files(paste0(dataFolder, '/GEE_exports/testImages'), full.names = T), read.csv)
 
@@ -92,6 +106,10 @@ points1<- reshape_csvPoints(csv1, 'peakCoordX', 'peakCoordY')
 pointsLand1 <- reshape_csvPoints(csv1, 'coastX', 'coastY')
 points2<- reshape_csvPoints(csv2, 'peakCoordX', 'peakCoordY')
 pointsLand2 <- reshape_csvPoints(csv2, 'coastX', 'coastY')
+points3<- reshape_csvPoints(csv3, 'peakCoordX', 'peakCoordY')
+pointsLand3 <- reshape_csvPoints(csv3, 'coastX', 'coastY')
+
+# filter -1?
 
 lines1 <- reshape_csvLines(csv1)
 
@@ -99,7 +117,24 @@ lines1 <- reshape_csvLines(csv1)
 lines_sf <- st_as_sf(lines1)
 
 
-mapview(pointsLand2,col.regions = c("blue")) + mapview(points1, col.regions = c("red")) + mapview(points2, col.regions = c("green")) + 
+
+ee_Initialize()
+# Load an image.
+image20090912 <- ee$Image("LANDSAT/LT05/C01/T1_TOA/LT05_229056_20090912")
+image20091115 <- ee$Image("LANDSAT/LT05/C01/T1_TOA/LT05_229056_20091115")
+
+
+vizParams <- list(
+  bands = c("B5", "B4", "B3"),
+  min = 0.05, max = 0.4, gamma = 1.4
+)
+test1 <- Map$addLayer(image20090912, vizParams, "Landsat 8 False color")
+
+test1 + 
+  mapview(pointsLand2,col.regions = c("blue")) + 
+  mapview(points1, col.regions = c("red"), layer.name = c("set1")) + 
+  mapview(points2, col.regions = c("green"), layer.name = c("set2")) + 
+  mapview(points3, col.regions = c("yellow"), layer.name = c("set3")) +
   mapview(lines_sf,xcol = "x", ycol = "y") 
 
 

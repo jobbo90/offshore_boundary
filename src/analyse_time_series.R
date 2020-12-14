@@ -95,23 +95,59 @@ geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 pos_to_test <- c('199000')
 testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test 
                     & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
+testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
 
+
+# # outlier detection: quantiles (tricky for large temporal range?)
+# lower_bound <- quantile(testPos$coastDist, 0.025)
+# upper_bound <- quantile(testPos$coastDist, 0.975)
+# # # indices that are between quantiles
+# ind <- which(testPos$coastDist > lower_bound & testPos$coastDist < upper_bound)
+
+# plot date & coastline Distance
 plot(as.Date(testPos$DATE_ACQUIRED),testPos$coastDist)
-clicked <- identify(as.Date(testPos$DATE_ACQUIRED),testPos$coastDist,
-                    n=1, labels = c(testPos$DATE_ACQUIRED))
 
+# outlier detection: rosnerTest
+# remove outliers based on a interval of 1 -3 years?
+# alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
+
+# https://www.statsandr.com/blog/outliers-detection-in-r/#:~:text=An%20outlier%20is%20a%20value,significantly%20from%20other%20data%20points.
+Rtest <- rosnerTest(testPos$coastDist,
+                   k = 10 
+                   # k = 10 or if length < 10 it should be 
+                   # this value makes a difference.... apply to blocks of 3 years ==> so outlier size depends on amount of images in those 3 years?
+)
+indices <- Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
+
+# if outlier give 1 in a new column
+testPos$outlier <- 0 # TRUE
+testPos$outlier[indices] <- 1 # FALSE
+
+# new<- testPos %>%
+#   filter(!row_number() %in% indices) # remove indices that correspond to outliers from rosnerTest
+plot(as.Date(testPos$DATE_ACQUIRED[testPos$outlier == 0]),testPos$coastDist[testPos$outlier == 0])
+
+# cut in block of so many months?
+testZoo <- as.POSIXct(cut(date(testPos$DATE_ACQUIRED), "3 months"))
+
+# how to exclude outliers from the aggregate??
+# https://datascienceplus.com/aggregate-data-frame-r/
+testpos2<-merge(testPos, aggregate(testPos$coastDist, list(testZoo), median), suffixes = c("dateGroup", ".mean"))# https://stackoverflow.com/questions/38380938/aggregate-conditional-statements
+# plot per group after removing outliers
+testPos <- merge(testPos, aggregate(testPos$coastDist, list(testZoo), median),suffixes = c("dateGroup", ".mean"))
+plot(testPos$Group.1, testPos$x)
 
 # heatmap / space-time plot
 library(lubridate) # for year/month etc.
 library(dplyr)    # for mutate, such as adding cols
 library(ggplot2)
-library(viridisLite)
-
+# library(viridisLite)
+library(viridis) # for visualization
 
 
 # # get for all transects an oldest coastline observation as baseline
 allFiles$baseline <- 0 
-reference_date <- c('')
+reference_date <- as.Date("2018-09-01")
 
 for (sid in pos) {
   # sid = 297000
@@ -123,16 +159,22 @@ for (sid in pos) {
                           allFiles$coastDist >= 0)
   
   # get first date after reference date
-  2018-06-01
+  index <- which.min(abs(as.Date(subsetTemp2$DATE_ACQUIRED)-reference_date))
+  
+  # you'd want to normalize for the mean position around the reference date to avoid
+  # outliers have to much effect
+  # option 1: filter outliers
+  # option 2: moving average
   
   if(nrow(subsetTemp2) == 0){
-    oldest_coastObs <- 0
+    coastObs <- 0
   } else {
-    oldest_coastObs <- subsetTemp2[subsetTemp2$DATE_ACQUIRED == min(subsetTemp2[, 'DATE_ACQUIRED']), 'coastDist']
+    coastObs <- subsetTemp2[index, 'coastDist'] 
+    # coastObs <- subsetTemp2[subsetTemp2$DATE_ACQUIRED == min(subsetTemp2[, 'DATE_ACQUIRED']), 'coastDist']
   }
   
   
-  allFiles$baseline[i] <- oldest_coastObs
+  allFiles$baseline[i] <- coastObs
 }
 
 
@@ -156,15 +198,19 @@ allFiles_mutate <- allFiles_mutate %>%
                       select(pos,day,month,year,full_date,coastDist, normalized) %>%
                       filter(!(coastDist == -1)) # & contbr_city == 'APO AE'
 
-# allFiles_mutate$baseline <- with(allFiles_mutate, ave(coastDist, date, FUN = min))
+labeled.dat <- allFiles_mutate[allFiles_mutate$pos %in% c('151000') ,]
 
-p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date, fill=normalized)) +
+
+
+p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date, fill=normalized))+ 
   geom_tile(color= "white",size=0.1) +
   # scale_fill_gradientn(colours=topo.colors(7),#na.value = "transparent",
   #                      breaks=c(0,median(allFiles_mutate$coastDist)),
   #                      labels=c("Minimum","Maximum"),
   #                      limits=c(0,median(allFiles_mutate$coastDist)))
-  scale_fill_viridis(name="Max Distance",option ="C", limits = c(-100, 1000), oob = scales::squish)
+  scale_fill_viridis(name="Max Distance",option ="C", limits = c(-500, 500), oob = scales::squish)
+  # geom_text(data = labeled.dat, aes(pos,full_date, label = pos), hjust = 2)
+
 
 
   # + scale_x_continuous(breaks =c(1,10,20,31))
