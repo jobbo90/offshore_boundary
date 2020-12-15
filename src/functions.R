@@ -176,3 +176,36 @@ reshape_csvLines <- function(csv){
   
   return(lines_sf)
 }
+
+
+rosner <- function(x){
+  # x <- testPos$coastDist
+  # x <- subsets$coastDist
+  output <- rep(1,length.out=length(x))
+  
+  if(length(x) > 5){
+    # assume no outliers (assign value 1)
+    
+    
+    K <- length(x)-2
+    if(K > 10){
+      K <- 10
+    }
+    
+    skip_to_next <- FALSE
+    
+    tryCatch(test <- rosnerTest(x, K, warn = F),
+             indices <- test$all.stats$Obs.Num[which(test$all.stats$Outlier)],
+             output <- replace(rep(0,length.out=length(x)), indices, rep(1,length.out=length(indices))), 
+             
+             error = function(e) { skip_to_next <<- TRUE})
+    # test <- any(rosnerTest(x, K, warn = F)), skip_to_next <- TRUE})
+    
+    if(skip_to_next) { output <- rep(1,length.out=length(x)) } 
+    
+    
+  }
+  
+  return (output)
+}
+
