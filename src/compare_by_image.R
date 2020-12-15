@@ -117,7 +117,8 @@ lines1 <- reshape_csvLines(csv1)
 lines_sf <- st_as_sf(lines1)
 
 
-
+# ee_clean_pyenv()
+# ee_install()
 ee_Initialize()
 # Load an image.
 image20090912 <- ee$Image("LANDSAT/LT05/C01/T1_TOA/LT05_229056_20090912")

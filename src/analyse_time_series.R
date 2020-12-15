@@ -23,7 +23,7 @@
 rm(list = ls())
 #' set working directory for Mac and PC
 wd<-getwd()
-# setwd("I:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
+# setwd("D:/BackUp_D_mangroMud_202001/Research/Software/Projects/offshore_boundary")
 
 
 ## ---------------------------
@@ -79,11 +79,11 @@ allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(
                                                                                 sep = ',', na.strings=c("","NA")
                                                                                 )))
 
-dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
-coastDist <- col_of_interest(allFiles, 'coastDist$')
+col_dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
+col_coastDist <- col_of_interest(allFiles, 'coastDist$')
 
 # all unique dates
-uniqueDates <- unique(allFiles[,dates]);
+uniqueDates <- unique(allFiles[,col_dates]);
 
 # all unique transect (id's)
 pos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
@@ -92,71 +92,76 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
 # test simple 2d plot coastline dist
-pos_to_test <- c('199000')
-testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test 
-                    & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
-testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
+pos_to_test <- c('121000')
+# testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test 
+#                     & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
+# testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
+
+# or on all entries 
+allFiles_gt0 <- subset(arrange(allFiles, pos, DATE_ACQUIRED), coastDist >=0) 
+
+# make groups of 3 months per transect
+
+test_allFiles <- allFiles_gt0 %>%  
+  mutate(date_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 months"))) %>%
+  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "1 year"))) 
+
+group_dates<-unique(test_allFiles$year_col)
+group_pos <- unique(test_allFiles$pos)
+
+# assume nothing is outlier
+test_allFiles$outlier <- 1
+
+for(i in group_dates){
+  # i<-group_dates[1]
+  
+  for(q in group_pos){
+    # q <- group_pos[15]
+    subsets <- subset(test_allFiles, year_col == i & pos == q)
+    # plot(as.Date(subsets$DATE_ACQUIRED), subsets$coastDist)
+    rownr <- strtoi(rownames(subset(test_allFiles, year_col == i & pos == q)))
+    
+    # detect outliers (give them a 0!!!)
+    test_allFiles[rownr, 'outlier'] <- rosner(subsets$coastDist)
+    
+  }
+}
 
 
-# # outlier detection: quantiles (tricky for large temporal range?)
-# lower_bound <- quantile(testPos$coastDist, 0.025)
-# upper_bound <- quantile(testPos$coastDist, 0.975)
-# # # indices that are between quantiles
-# ind <- which(testPos$coastDist > lower_bound & testPos$coastDist < upper_bound)
-
-# plot date & coastline Distance
-plot(as.Date(testPos$DATE_ACQUIRED),testPos$coastDist)
-
-# outlier detection: rosnerTest
-# remove outliers based on a interval of 1 -3 years?
-# alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
-
-# https://www.statsandr.com/blog/outliers-detection-in-r/#:~:text=An%20outlier%20is%20a%20value,significantly%20from%20other%20data%20points.
-Rtest <- rosnerTest(testPos$coastDist,
-                   k = 10 
-                   # k = 10 or if length < 10 it should be 
-                   # this value makes a difference.... apply to blocks of 3 years ==> so outlier size depends on amount of images in those 3 years?
-)
-indices <- Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
-
-# if outlier give 1 in a new column
-testPos$outlier <- 0 # TRUE
-testPos$outlier[indices] <- 1 # FALSE
-
-# new<- testPos %>%
-#   filter(!row_number() %in% indices) # remove indices that correspond to outliers from rosnerTest
-plot(as.Date(testPos$DATE_ACQUIRED[testPos$outlier == 0]),testPos$coastDist[testPos$outlier == 0])
-
-# cut in block of so many months?
-testZoo <- as.POSIXct(cut(date(testPos$DATE_ACQUIRED), "3 months"))
-
-# how to exclude outliers from the aggregate??
-# https://datascienceplus.com/aggregate-data-frame-r/
-testpos2<-merge(testPos, aggregate(testPos$coastDist, list(testZoo), median), suffixes = c("dateGroup", ".mean"))# https://stackoverflow.com/questions/38380938/aggregate-conditional-statements
 # plot per group after removing outliers
-testPos <- merge(testPos, aggregate(testPos$coastDist, list(testZoo), median),suffixes = c("dateGroup", ".mean"))
-plot(testPos$Group.1, testPos$x)
+# check i group_by actually removes the outliers!
+test_allFiles_mn <- test_allFiles %>% group_by(pos, date_col, outlier) %>%
+  mutate(mn = median(coastDist)) #%>%
+  # ungroup()
+
+
+testSubset <- subset(test_allFiles_mn, 
+                     pos == pos_to_test)
+
+outliers <- subset(testSubset, outlier == 0)
+nonOutliers <- subset(testSubset, outlier == 1)
+
+plot(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, ylim = c(min(outliers$coastDist)-30,max(nonOutliers$coastDist)+ 30))
+points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
+
+# median values with steps per 3 months ()
+points(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$mn, col = 'blue')
 
 # heatmap / space-time plot
-library(lubridate) # for year/month etc.
-library(dplyr)    # for mutate, such as adding cols
-library(ggplot2)
-# library(viridisLite)
-library(viridis) # for visualization
-
 
 # # get for all transects an oldest coastline observation as baseline
-allFiles$baseline <- 0 
+test_allFiles_mn$baseline <- 0 
 reference_date <- as.Date("2018-09-01")
 
 for (sid in pos) {
   # sid = 297000
   # print(sid)
-  i <- allFiles$pos == sid # create a logical index
+  i <- test_allFiles_mn$pos == sid # create a logical index
   
   # get min date with an observation
-  subsetTemp2 <- subset(allFiles, allFiles$pos == sid &
-                          allFiles$coastDist >= 0)
+  subsetTemp2 <- subset(test_allFiles_mn, test_allFiles_mn$pos == sid &
+                          test_allFiles_mn$coastDist >= 0 &
+                          test_allFiles_mn$outlier != 0) # exclude detected outliers 
   
   # get first date after reference date
   index <- which.min(abs(as.Date(subsetTemp2$DATE_ACQUIRED)-reference_date))
@@ -174,7 +179,7 @@ for (sid in pos) {
   }
   
   
-  allFiles$baseline[i] <- coastObs
+  test_allFiles_mn$baseline[i] <- coastObs
 }
 
 
@@ -226,3 +231,23 @@ p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date, fill=normalized))+
 
 
 
+
+# https://www.statsandr.com/blog/outliers-detection-in-r/#:~:text=An%20outlier%20is%20a%20value,significantly%20from%20other%20data%20points.
+# K <- length(testPos$coastDist)-2
+# if(K > 10){
+#   K <- 9
+# }
+# Rtest <- rosnerTest(testPos$coastDist,
+#                    k = length(testPos$coastDist) - 2
+#                    # k = 10 or if length < 10 it should be 
+#                    # this value makes a difference.... apply to blocks of 3 years ==> so outlier size depends on amount of images in those 3 years?
+# )
+# Rtest2 <- rosner(testPos$coastDist)
+# 
+# indices <- Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
+# 
+# # if outlier give 1 in a new column
+# testPos$outlier <- 0 # TRUE
+# testPos$outlier[indices] <- 1 # FALSE
+# # plot outliers
+# points(as.Date(testPos$DATE_ACQUIRED[testPos$outlier == 0]),testPos$coastDist[testPos$outlier == 0], col = 'red')

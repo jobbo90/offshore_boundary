@@ -177,7 +177,9 @@ reshape_csvLines <- function(csv){
   return(lines_sf)
 }
 
-
+# outlier detection: rosnerTest
+# remove outliers based on a interval of 1 -3 years?
+# alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
 rosner <- function(x){
   # x <- testPos$coastDist
   # x <- subsets$coastDist
@@ -193,12 +195,12 @@ rosner <- function(x){
     }
     
     skip_to_next <- FALSE
-    
-    tryCatch(test <- rosnerTest(x, K, warn = F),
-             indices <- test$all.stats$Obs.Num[which(test$all.stats$Outlier)],
-             output <- replace(rep(0,length.out=length(x)), indices, rep(1,length.out=length(indices))), 
+    # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
+    tryCatch(output[rosnerTest(x, K, warn = F)[['all.stats']][['Obs.Num']][which(rosnerTest(x, K, warn = F)[['all.stats']][['Outlier']])]] <- 0,
              
-             error = function(e) { skip_to_next <<- TRUE})
+             # test <- ,
+             
+             error = function(e) {skip_to_next <<- TRUE})
     # test <- any(rosnerTest(x, K, warn = F)), skip_to_next <- TRUE})
     
     if(skip_to_next) { output <- rep(1,length.out=length(x)) } 
@@ -208,4 +210,3 @@ rosner <- function(x){
   
   return (output)
 }
-
