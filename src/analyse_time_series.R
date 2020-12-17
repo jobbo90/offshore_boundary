@@ -92,19 +92,18 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
 # test simple 2d plot coastline dist
-pos_to_test <- c('121000')
-# testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test 
-#                     & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
-# testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
+pos_to_test <- c('236000') # 236000: loss example / 187000: gain example with clear outliers
+testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test
+                    & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
+testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
 
 # or on all entries 
 allFiles_gt0 <- subset(arrange(allFiles, pos, DATE_ACQUIRED), coastDist >=0) 
 
 # make groups of 3 months per transect
-
 test_allFiles <- allFiles_gt0 %>%  
   mutate(date_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 months"))) %>%
-  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "1 year"))) 
+  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 year"))) 
 
 group_dates<-unique(test_allFiles$year_col)
 group_pos <- unique(test_allFiles$pos)
@@ -112,11 +111,12 @@ group_pos <- unique(test_allFiles$pos)
 # assume nothing is outlier
 test_allFiles$outlier <- 1
 
+# estimate outliers
 for(i in group_dates){
-  # i<-group_dates[1]
+  # i<-group_dates[group_dates == c("2017-01-01")]
   
   for(q in group_pos){
-    # q <- group_pos[15]
+    # q <- group_pos[group_pos == pos_to_test]
     subsets <- subset(test_allFiles, year_col == i & pos == q)
     # plot(as.Date(subsets$DATE_ACQUIRED), subsets$coastDist)
     rownr <- strtoi(rownames(subset(test_allFiles, year_col == i & pos == q)))
@@ -141,73 +141,106 @@ testSubset <- subset(test_allFiles_mn,
 outliers <- subset(testSubset, outlier == 0)
 nonOutliers <- subset(testSubset, outlier == 1)
 
-plot(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, ylim = c(min(outliers$coastDist)-30,max(nonOutliers$coastDist)+ 30))
+plot(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, ylim = c(min(testSubset$coastDist)-30,max(testSubset$coastDist)+ 30))
 points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
 
 # median values with steps per 3 months ()
-points(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$mn, col = 'blue')
+points(as.Date(nonOutliers$date_col), nonOutliers$mn, col = 'blue')
 
 # heatmap / space-time plot
 
 # # get for all transects an oldest coastline observation as baseline
 test_allFiles_mn$baseline <- 0 
-reference_date <- as.Date("2018-09-01")
+test_allFiles_mn$slope <- -1
+reference_date <- as.Date("2017-01-01")
 
 for (sid in pos) {
-  # sid = 297000
+  # sid = pos_to_test
   # print(sid)
   i <- test_allFiles_mn$pos == sid # create a logical index
   
   # get min date with an observation
   subsetTemp2 <- subset(test_allFiles_mn, test_allFiles_mn$pos == sid &
-                          test_allFiles_mn$coastDist >= 0 &
-                          test_allFiles_mn$outlier != 0) # exclude detected outliers 
+                          test_allFiles_mn$coastDist >= 0) 
+                          # test_allFiles_mn$outlier != 0) # exclude detected outliers 
+  outliers <- subset(subsetTemp2, outlier == 0)
+  nonOutliers <- subset(subsetTemp2, outlier == 1)
+
+  # plot(as.Date(subsetTemp2$DATE_ACQUIRED), subsetTemp2$coastDist,ylim = c(min(subsetTemp2$coastDist)-30,max(subsetTemp2$coastDist)+ 30))
+  # points(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, col = 'green')
+  # points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
   
-  # get first date after reference date
-  index <- which.min(abs(as.Date(subsetTemp2$DATE_ACQUIRED)-reference_date))
-  
-  # you'd want to normalize for the mean position around the reference date to avoid
-  # outliers have to much effect
-  # option 1: filter outliers
-  # option 2: moving average
+  # you'd want to normalize for the coastline position around the reference date
+  # get first date after reference date:
+  index <- which.min(abs(as.Date(nonOutliers$DATE_ACQUIRED)-reference_date))
   
   if(nrow(subsetTemp2) == 0){
     coastObs <- 0
-  } else {
+    slope <- 0
+    } else {
     coastObs <- subsetTemp2[index, 'coastDist'] 
+    
+    lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
+    intercept <-lm.out$coefficients[1]
+    slope <- lm.out$coefficients[2]
+    
+    # residuals
+    resid <- lm.out$residuals
+    
+    maxResid <- which.max(abs(resid))
+    
+    # points(as.Date(nonOutliers$DATE_ACQUIRED[maxResid]), nonOutliers$coastDist[maxResid], col = 'purple')
+    
+    # firstSubset <- nonOutliers[1:maxResid,]
+    # secondSubset <- nonOutliers[maxResid:nrow(nonOutliers),]
+    # 
+    # firstSubset_lm <- lm(firstSubset$coastDist~as.numeric(as.Date(firstSubset$DATE_ACQUIRED)))
+    # secondSubset_lm <- lm(secondSubset$coastDist~as.numeric(as.Date(secondSubset$DATE_ACQUIRED)))
+    
+    # firstSubset_est <- firstSubset_lm$coefficients[1] + as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)) * firstSubset_lm$coefficients[2]
+    
+    
+    estimated <- intercept + (as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))*slope)
+    # plot the fitted line
+    # abline(lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))),
+           # lty = 2)
+    # abline(lm(firstSubset$coastDist~as.numeric(as.Date(firstSubset$DATE_ACQUIRED))), 
+    #        lty = 2)
+    # abline(lm(secondSubset$coastDist~as.numeric(as.Date(secondSubset$DATE_ACQUIRED))), 
+           # lty = 2)
+    
+    # use identify when necesary!
+    # date <- identify(as.Date(subsetTemp2$DATE_ACQUIRED), subsetTemp2$coastDist, n=1, labels=as.Date(subsetTemp2$DATE_ACQUIRED))
+    
     # coastObs <- subsetTemp2[subsetTemp2$DATE_ACQUIRED == min(subsetTemp2[, 'DATE_ACQUIRED']), 'coastDist']
   }
   
   
-  test_allFiles_mn$baseline[i] <- coastObs
+  test_allFiles_mn$baseline[i] <- as.numeric(coastObs)
+  test_allFiles_mn$slope[i] <- as.numeric(slope)
 }
-
-
-# normalization needs to be changed:
-# all transects need to have 0 at the same date in order to visualized the differences
-# find a date, set given date to 0, all other dates need to have the same value subtracted
-
 
 
 # subtract each that values from each obs (ensure positive values)
 # to normalize
-allFiles$normalized <- allFiles$coastDist - allFiles$baseline
+test_allFiles_mn$normalized <- test_allFiles_mn$coastDist - test_allFiles_mn$baseline
+test_allFiles_mn$mn_normalized <- test_allFiles_mn$mn - test_allFiles_mn$baseline
 
-allFiles_mutate <- allFiles %>% mutate(year = year(DATE_ACQUIRED),
+allFiles_mutate <- test_allFiles_mn %>% mutate(year = year(DATE_ACQUIRED),
                     month = month(DATE_ACQUIRED, label=TRUE),
                     day = day(DATE_ACQUIRED),
-                    full_date= date(DATE_ACQUIRED))
+                    full_date= date(DATE_ACQUIRED),
+                    full_date2= date(date_col))
 
 
 allFiles_mutate <- allFiles_mutate %>% 
-                      select(pos,day,month,year,full_date,coastDist, normalized) %>%
-                      filter(!(coastDist == -1)) # & contbr_city == 'APO AE'
+                      filter(!(coastDist == -1) & outlier == 0) # filter outliers & negative coastal distances
 
 labeled.dat <- allFiles_mutate[allFiles_mutate$pos %in% c('151000') ,]
 
 
 
-p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date, fill=normalized))+ 
+p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date2, fill=mn_normalized))+ 
   geom_tile(color= "white",size=0.1) +
   # scale_fill_gradientn(colours=topo.colors(7),#na.value = "transparent",
   #                      breaks=c(0,median(allFiles_mutate$coastDist)),
@@ -218,16 +251,50 @@ p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date, fill=normalized))+
 
 
 
-  # + scale_x_continuous(breaks =c(1,10,20,31))
-  # scale_fill_viridis(name="cross shore dist",option ="C")
-
-# define output matrices
-# lines <- vector('list', length(uniqueX));
-# allPoints <- vector('list', length(csv));
-# df_coastDist = data.frame(matrix(NA, length(uniqueX), length(uniqueDates)+1),
-#                           stringsAsFactors=F) # Empty data frame for coastal distance
-# colnames(df_coastDist) <- c('pos', uniqueDates)
+# library(plotly)
+# library(grid)
+# ggplotly(p)
+#  
+# # downViewport('panel.3-4-3-4') 
+# pushViewport(dataViewport(x, y, c(0,10), c(0.1, 0.5))) 
+# pick<-grid.locator('in')
+# pick.n <- as.numeric(pick)
+# view.x <- as.numeric(convertX( unit(x,'native'), 'in' ))
+# view.y <- as.numeric(convertY( unit(y,'native'), 'in' ))
+# w <- which.min((view.x-pick.n[1])^2 + (view.y-pick.n[2])^2)
 # 
+# 
+# ggidentify <- function (x, y, labels, xscale=NULL, yscale=NULL) { 
+#   depth <- downViewport('ROOT')
+#   pushViewport(dataViewport(x,y, xscale, yscale))
+#   pick <- grid.locator('in')
+#   while(!is.null(pick)) {
+#     pick.n <- as.numeric(pick)
+#     view.x <- as.numeric(convertX( unit(x,'native'), 'in' ))
+#     view.y <- as.numeric(convertY( unit(y,'native'), 'in' ))
+#     d <- min( (view.x-pick.n[1])^2 + (view.y-pick.n[2])^2 )
+#     w <- which.min((view.x-pick.n[1])^2 + (view.y-pick.n[2])^2)
+#     if (d>0.1) {
+#       print("Closest point is too far")
+#     } else {  
+#       popViewport(n=1)
+#       upViewport(depth)
+#       print(last_plot() + annotate("text", label=labels[w], x = x[w], y = y[w], 
+#                                    size = 5, hjust=-0.5, vjust=-0.5))
+#       depth <- downViewport('panel.3-4-3-4')
+#       pushViewport(dataViewport(x,y, xscale, yscale))
+#     }
+#     pick <- grid.locator('in')
+#   }
+#   popViewport(n=1)
+#   upViewport(depth)
+# }
+# 
+
+
+
+
+
 
 
 

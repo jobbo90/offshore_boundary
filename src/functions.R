@@ -90,7 +90,9 @@ reshape_csvPoints <- function(csv, patternX, patternY){
                          y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))]),
                          DATE_ACQUIRED = as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')]),
                          pos = as.character(test1transect[,col_of_interest(csv, 'pos$')]),
-                         axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')]))
+                         axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')])
+                         # endX
+                         )
     
     allPoints <- rbind(allPoints, coords)
     
