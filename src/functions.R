@@ -90,8 +90,10 @@ reshape_csvPoints <- function(csv, patternX, patternY){
                          y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))]),
                          DATE_ACQUIRED = as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')]),
                          pos = as.character(test1transect[,col_of_interest(csv, 'pos$')]),
-                         axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')])
-                         # endX
+                         axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')]),
+                         endDrop = as.numeric(test1transect[,col_of_interest(csv, 'endDrop$')]),
+                         coastDist = as.numeric(test1transect[,col_of_interest(csv, 'coastDist$')]),
+                         mudFract = as.numeric(test1transect[,col_of_interest(csv, 'mudFract$')])
                          )
     
     allPoints <- rbind(allPoints, coords)
@@ -103,7 +105,11 @@ reshape_csvPoints <- function(csv, patternX, patternY){
   SpatialPoints <- SpatialPointsDataFrame(data.frame(allPoints[,'x'], allPoints[,'y'] ), 
                                            data = data.frame(DATE_ACQUIRED = allPoints[,'DATE_ACQUIRED'],
                                                              pos = allPoints[,'pos'],
-                                                             axisDist = as.numeric(allPoints[,'axisDist'])),
+                                                             axisDist = as.numeric(allPoints[,'axisDist']),
+                                                             endDrop = as.numeric(allPoints[,'endDrop']),
+                                                             coastDist = as.numeric(allPoints[,'coastDist']),
+                                                             mudFract = as.numeric(allPoints[,'mudFract'])
+                                                             ),
                                            proj4string=CRS("+proj=longlat +datum=WGS84"))
   points_sf <- st_as_sf(SpatialPoints)
   

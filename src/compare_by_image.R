@@ -77,7 +77,7 @@ df <- df[grep('.csv', folderSelect, ignore.case = T),]
 # set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_extraMask_largestDrop'
 
 # largest, relative and slope drop for 20091115 image
-set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201216'
+set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201217'
 # set3 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201210'
 # set3 <- 'Suriname_229_56_2009_till_2009_testImage20091115_slopeDrop_20201210'
 # set3 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201210'
@@ -86,7 +86,7 @@ set2 <- 'Suriname_229_56_2009_till_2009_testImage20091115_relativeDrop_20201216'
 # largest, relative and slope drop for 20090912 image
 # set1 <- 'Suriname_229_56_2009_till_2009_testImage20090912_largestDrop_20201210'
 # set3 <- 'Suriname_229_56_2009_till_2009_testImage20090912_relativeDrop_20201210'
-set1 <- 'Suriname_229_56_2009_till_2009_testImage20090912_relativeDrop_20201216'
+set1 <- 'Suriname_229_56_2009_till_2009_testImage20090912_relativeDrop_20201217'
 
 # set3 <- 'Suriname_229_56_2009_till_2009_testImage20090912_extraMask_largestDrop'
 # set2 <- 'Suriname_229_56_2009_till_2009_testImage20090912_extraMask_V20201207'
@@ -100,10 +100,24 @@ csv2 = as.matrix(read.csv2(as.character(df[grep(set2, folderSelect, ignore.case 
 #                            header = T, sep = ',', na.strings=c("","NA"))) # rewrite as matrix to read columns as numeric values
 # 
 
-# mydata <- sapply(list.files(paste0(dataFolder, '/GEE_exports/testImages'), full.names = T), read.csv)
+
+
+csv1[order(csv1[,'pos']),]
+
+# plot(csv1[,'pos'],csv1[,'mudFract'])
 
 
 points1<- reshape_csvPoints(csv1, 'peakCoordX', 'peakCoordY')
+
+# # plot test
+points1_df <- points1 %>% st_drop_geometry()
+# points1_df$pos <- as.numeric(points1_df$pos)
+# points1_df[order(points1_df$pos),]
+# plot(points1_df_order$pos, points1_df_order$mudFract)
+
+
+
+
 pointsLand1 <- reshape_csvPoints(csv1, 'coastX', 'coastY')
 points2<- reshape_csvPoints(csv2, 'peakCoordX', 'peakCoordY')
 pointsLand2 <- reshape_csvPoints(csv2, 'coastX', 'coastY')
@@ -111,6 +125,8 @@ pointsLand2 <- reshape_csvPoints(csv2, 'coastX', 'coastY')
 # pointsLand3 <- reshape_csvPoints(csv3, 'coastX', 'coastY')
 
 # filter -1?
+
+
 
 lines1 <- reshape_csvLines(csv1)
 
@@ -146,21 +162,31 @@ test1 + test2 +
 
 
 
-# overlay with the image of interest?
-# remotes::install_github("r-spatial/rgee") 
+# attempt to filter points
+# 1) each point compared with neighbours:
+  # on comparable index value
+  # comparable distance value (large jumps are not sensible)
+# check for linear features (e.g. do multiple points form a linear feature)
 
-#  cannot remove jsonlite package (remove.packages("jsonlite"))
 
-#2D plotting
-# order on column names
-df_coastDist <- df_coastDist[,order(names(df_coastDist))]
+# after filtering create convext hulls
+# convex of all points
+test<- as(points1, Class = 'Spatial')
+library(rgeos)
+convex<- gConvexHull(test)
+# geom <- points1$geometry
+# https://babichmorrowc.github.io/post/2019-03-18-alpha-hull/
 
-plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), c(1:length(2:ncol(df_coastDist))))
 
-plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), df_coastDist[1,1:ncol(df_coastDist)-1])
-clicked <- identify(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]),
-                    df_coastDist[1,1:ncol(df_coastDist)-1], 
-                    n=1, labels=colnames(df_coastDist)[1:ncol(df_coastDist)-1])
+
+# df_coastDist <- df_coastDist[,order(names(df_coastDist))]
+# 
+# plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), c(1:length(2:ncol(df_coastDist))))
+# 
+# plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), df_coastDist[1,1:ncol(df_coastDist)-1])
+# clicked <- identify(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]),
+#                     df_coastDist[1,1:ncol(df_coastDist)-1], 
+#                     n=1, labels=colnames(df_coastDist)[1:ncol(df_coastDist)-1])
 
 
 

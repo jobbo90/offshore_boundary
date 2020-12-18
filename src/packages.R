@@ -8,7 +8,7 @@ library(rgee)
 library(ggplot2)
 library(readr)
 library(mapview)
-library(leafpop)
+# library(leafpop)
 # library(tidyverse)
 library(dplyr)      # for mutate, such as adding cols
 # library(reshape2)
