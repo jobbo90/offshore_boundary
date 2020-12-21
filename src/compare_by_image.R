@@ -102,7 +102,7 @@ csv2 = as.matrix(read.csv2(as.character(df[grep(set2, folderSelect, ignore.case 
 
 
 
-csv1[order(csv1[,'pos']),]
+# csv1[order(csv1[,'pos']),]
 
 # plot(csv1[,'pos'],csv1[,'mudFract'])
 
@@ -135,8 +135,8 @@ lines_sf <- st_as_sf(lines1)
 
 # ee_clean_pyenv()
 # ee_install()
-# # ee_install_upgrade(version = "0.1.224") 
-# Sys.getenv('EARTHENGINE_PYTHON'): 
+# ee_install_upgrade(version = "0.1.224")
+# Sys.getenv('EARTHENGINE_PYTHON')
 # "C:\\Users\\5600944\\AppData\\Local\\r-miniconda\\envs\\rgee\\python.exe"
 
 

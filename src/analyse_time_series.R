@@ -38,7 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
-
+ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
 
@@ -46,7 +46,7 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <- c('2018', '2019') 
+years <- c('2009')#c('2018', '2019') 
 # transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
 
 # select folders
@@ -73,7 +73,7 @@ for (q in seq_along(years)) {
                              purrr::pmap_lgl(all)
                          ))
 }
-filtered <- unique(filtered)[1:2,]
+# filtered <- unique(filtered)[1:2,]
 
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
@@ -84,12 +84,194 @@ col_coastDist <- col_of_interest(allFiles, 'coastDist$')
 
 # all unique dates
 uniqueDates <- unique(allFiles[,col_dates]);
-
 # all unique transect (id's)
-pos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
+allPos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
 uniqueX<- unique(allFiles[, col_of_interest(allFiles, 'originX$')]);
 uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
+
+
+coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY')
+mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY')
+
+
+
+
+
+collection <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
+  filterBounds(ee$Geometry$Point(-55.54, 5.94))
+
+collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
+  filterBounds(ee$Geometry$Point(-55.54, 5.94))
+  # merge(collection)
+
+
+visParams = list(
+    bands = c("B5", "B4", "B3"),
+    min = 0.05, max = 0.4, gamma = 1.4
+  )
+
+for (i in uniqueDates){
+  # i <- uniqueDates[2]
+  coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == i &
+                                  coastlines$coastDist >= 0) 
+  mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
+                                mudbanks$axisDist >= 0) 
+  # order
+  coastlines_selection[order(as.character(coastlines_selection$pos)),]
+  mudbanks_selection[order(as.character(mudbanks_selection$pos)),]
+  
+  
+  for (pnt in 1:nrow(mudbanks_selection)){
+    # pnt <- 100
+    # pos_of_interst <- 223000
+    
+    # selected_point <-mudbanks_selection[pnt,]
+    selected_point <-mudbanks_selection[which(mudbanks_selection$pos == pos_of_interst),]
+    
+    # select nearby points
+    # a) nearest 2?
+    # b) based on pos
+    ajoining_points <- subset(mudbanks_selection, as.character(pos) <=  as.numeric(as.character(selected_point$pos))+2000 &
+                                as.character(pos) >= as.numeric(as.character(selected_point$pos))-2000 &
+                                as.character(pos) != as.numeric(as.character(selected_point$pos)))
+    
+    geom <- st_coordinates(ajoining_points)
+    test_spline<-smooth.spline(geom[,1] ~ geom[,2], spar=0.50)
+    
+    SpatialPoints <- SpatialPointsDataFrame(data.frame(test_spline$y, test_spline$x ), 
+                                            data = data.frame(DATE_ACQUIRED = ajoining_points$DATE_ACQUIRED,
+                                                              mudFract = ajoining_points$mudFract),
+                                            proj4string=CRS("+proj=longlat +datum=WGS84"))
+    
+    # points_sf <- st_as_sf(SpatialPoints)
+    
+    # plot ajoining points
+    plot(test_spline$x, test_spline$y)
+    points(st_coordinates(selected_point)[,'Y'], st_coordinates(selected_point)[,'X'], col = 'blue') # point of interest
+    segments(test_spline$x[1],test_spline$y[1],  
+             test_spline$x[length(test_spline$x)], test_spline$y[length(test_spline$y)])            # linear fit
+    
+    # distance from selected point to fitting line 
+    dist <- shortestDistanceToLines(Mx=st_coordinates(selected_point)[,'Y'],My=st_coordinates(selected_point)[,'X'], 
+                            Ax=test_spline$x[1],Ay=test_spline$y[1], 
+                            Bx=test_spline$x[length(test_spline$x)],By=test_spline$y[length(test_spline$y)])
+    
+    
+    plot(ajoining_points$axisDist,ajoining_points$mudFract)
+    points(selected_point$axisDist, selected_point$mudFract, col = 'blue')
+    
+    # if dist < threshold (e.g. 0.01?) then keep
+    # else check for index value, if sufficient: keep it 
+    # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+    # http://www.geoinfo.info/proceedings_geoinfo2006.split/paper1.pdf
+    # https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg 
+    
+    # test douglasPeuckerEpsilon
+    # library(kmlShape)
+    
+    
+    transform<-st_transform(mudbanks_selection, 32621)
+    geom <- cbind(st_coordinates(mudbanks_selection), pos = as.numeric(as.character(mudbanks_selection$pos)))
+    
+    # order on position 
+    geom_ordered <- geom[order(geom[,'pos']),]
+    
+    range <- 9:16 # for testing
+    
+    plot( geom_ordered[range,1], geom_ordered[range,2],type="p") # original points
+    points( geom_ordered[range[1],1], geom_ordered[range[1],2],type="p", col = 'blue') # begin point
+    functionD <- DouglasPeuckerEpsilon(trajx = geom_ordered[range,1],trajy = geom_ordered[range,2], epsilon = 0.01, spar = NA)
+    # testD <- DouglasPeuckerNbPoints( geom_ordered[range,1], trajy = geom_ordered[range,2], 2, spar=NA)
+    # points( testD[,1], testD[,2],type="p", col = 'red')
+    points( functionD[,1], functionD[,2],type="p", col = 'red')
+
+      points( functionD[,1], functionD[,2],type="p", col = 'red')
+    
+    # douglas pecker algorithm looks at the points that are furthest away from line, if large enough: included as vertext.
+    # this assumes outliers are filtered sufficiently
+    # e.g. first filter (e.g. by using a spline function (spar in Douglas function))
+    # or manual filter that looks at a combination of distance on a line, and the fraction (within a range)
+    
+    # Alternatively; inverse of douglas filtering. 
+    # Look at point, if it's distance is to far away exclude it
+    # But that will only work if whe apply it on sub polylines that are on a imaginary line that corresponds to a boundary
+    # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+    
+    findClosestPoint_manual <- function(trajx,trajy){
+      
+      # trajx <- geom_ordered[range,1]
+      # trajy <- geom_ordered[range,2]
+      
+      dmax <- 1
+      index <- 1
+      end <- length(trajx)
+      
+      if(end==2){
+        index <- 1
+        dmax <- 0
+      }else{
+        for(i in 2:(end-1)){ # for each point but the first and last
+          i <- 2
+          # calculate the distance
+          d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
+          if ( d < dmax ) {
+            # update dmax & index with the distance
+            # in the end only the max distance is included (due to the if(d>dmax))
+            index <- i
+            dmax <- d
+          }else{} # don't do anything
+        }
+      }
+      
+      output <- c(index, dmax)
+      names(output) <- c('index', 'dmax')
+      
+      return(output)
+      # return(c(index=index,dmax=dmax))
+    }
+    
+    nearestPoint <- findClosestPoint_manual(geom_ordered[range,1],geom_ordered[range,2])
+    points( geom_ordered[nearestPoint['index'],1], geom_ordered[nearestPoint['index'],2],type="p", col = 'green')
+    segments(trajx[1],trajy[1],  trajx[end], trajy[end])
+    
+    
+    farestPoint <- findFarestPoint_manual(geom_ordered[range,1], geom_ordered[range,2])
+    
+    points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
+    
+    
+    
+    # collection 
+    filtCollect <- collectionL7$filterDate(as.character(as.Date(i)-1), as.character(as.Date(i)+1))
+    
+    id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
+    
+    first <- Map$addLayer(filtCollect$first(), visParams, paste0(i))
+    Map$centerObject(filtCollect$first())
+    
+    
+
+    first +
+      mapview(mudbanks_selection, col.regions = c("blue"), layer.name = c('mudbanks_selection')) +
+      mapview(selected_point, col.regions = c("red"), layer.name = c('selected_point')) +
+      mapview(ajoining_points, col.regions = c("green"), layer.name = c('ajoining_points')) +
+      mapview(SpatialPoints, col.regions = c("yellow"), layer.name = c('spline')) 
+    
+  }
+  
+  
+  # https://gis.stackexchange.com/questions/68359/creating-average-polygon
+  
+  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
+    mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
+  
+  
+
+}
+
+
+
 
 # test simple 2d plot coastline dist
 pos_to_test <- c('236000') # 236000: loss example / 187000: gain example with clear outliers
@@ -154,7 +336,7 @@ test_allFiles_mn$baseline <- 0
 test_allFiles_mn$slope <- -1
 reference_date <- as.Date("2017-01-01")
 
-for (sid in pos) {
+for (sid in allPos) {
   # sid = pos_to_test
   # print(sid)
   i <- test_allFiles_mn$pos == sid # create a logical index

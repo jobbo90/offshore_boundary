@@ -218,3 +218,86 @@ rosner <- function(x){
   
   return (output)
 }
+
+
+
+
+# source: https://rdrr.io/cran/kmlShape/src/R/reduceTraj.R
+shortestDistanceToLines <- function(Mx,My,Ax,Ay,Bx,By){ # get distance to line
+  aire <- abs((By-Ay)*(Mx-Ax)-(Bx-Ax)*(My-Ay))
+  return(  aire / sqrt((Bx-Ax)^2 + (By-Ay)^2))
+}
+
+findFarestPoint_manual <- function(trajx,trajy){
+  
+  # trajx <- geom_ordered[range,1]
+  # trajy <- geom_ordered[range,2]
+  
+  dmax <- 0
+  index <- 1
+  end <- length(trajx)
+  
+  if(end==2){
+    index <- 1
+    dmax <- 0
+  }else{
+    for(i in 2:(end-1)){ # for each point but the first and last
+      # i <- 2
+      # calculate the distance
+      d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
+      if ( d > dmax ) {
+        # update dmax & index with the distance
+        # in the end only the max distance is included (due to the if(d>dmax))
+        index <- i
+        dmax <- d
+      }else{}
+    }
+  }
+  
+  output <- c(index, dmax)
+  names(output) <- c('index', 'dmax')
+  
+  return(output)
+  # return(c(index=index,dmax=dmax))
+}
+
+DouglasPeuckerEpsilon <- function(trajx,trajy,epsilon,spar=NA){
+  # trajx <- geom_ordered[range,1]
+  # trajy <- geom_ordered[range,2]
+  
+  # trajx <- trajx[1:index]
+  # trajy <- trajy[1:index]
+  
+  missings <- is.na(trajx)|is.na(trajy)
+  if(any(missings)){
+    trajx <- trajx[!missings]
+    trajy <- trajy[!missings]
+  }else{}
+  
+  if(!is.na(spar)){trajy <- smooth.spline(trajx,trajy,spar=spar)[["y"]]}else{}
+  
+  # farestPoint <- findFarestPoint(trajx,trajy)
+  farestPoint <- findFarestPoint_manual(trajx,trajy)
+  index <- farestPoint["index"]
+  end <- length(trajx)
+  # points(trajx[index], trajy[index], col = 'blue')
+  
+  # if farest point is big enough; use it as a vertext
+  if ( farestPoint["dmax"] > epsilon ) {
+    recResults1 = DouglasPeuckerEpsilon(trajx[1:index],trajy[1:index], epsilon)
+    recResults2 = DouglasPeuckerEpsilon(trajx[index:end],trajy[index:end], epsilon)
+    
+    resultTrajx = c(recResults1$x,recResults2$x[-1])
+    resultTrajy = c(recResults1$y,recResults2$y[-1])
+    #        d = c(farestPoint["dmax"],recResults1$d,recResults2$d)
+  } else {
+    resultTrajx = c(trajx[1],trajx[end])
+    resultTrajy = c(trajy[1],trajy[end])
+    #        d=numeric()
+  }
+  return(data.frame(x=resultTrajx,y=resultTrajy))
+}
+
+
+
+
