@@ -35,16 +35,18 @@ col_of_interest <- function(csv, patt){
   return(grep(paste( '^', patt, sep = ''), colnames(csv), fixed = F))
 }
 
-reshape_csvPoints <- function(csv, patternX, patternY){
+reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   #' @title reshape CSV to points matrix
   #' @description Return column number matching name with string pattern
   #' @param file csv file
   #' @param patternX is the pattern describing column of x-coordinate
   #' @param patternY is the pattern describing column of Y-coordinate
   
-  # csv <- csv1
-  # patternX <- 'peakCoordX'
-  # patternY <- 'peakCoordY'
+  # csv <- allFiles
+  # patternX <- 'coastX'
+  # patternY <- 'coastY'
+  # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist')
+  # cols_to_keep <- c('coastDist')
   
   dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
   coastDist <- col_of_interest(csv, 'coastDist$')
@@ -62,7 +64,7 @@ reshape_csvPoints <- function(csv, patternX, patternY){
   geo<- unique(csv[, col_of_interest(csv, '.geo')]);
   
   # define output matrices
-  allPoints <- vector('list', length(csv));
+  allPoints <- vector('list', length(csv))
   
   for (n in 1:length(uniqueX)){
     #n<-1
@@ -89,12 +91,19 @@ reshape_csvPoints <- function(csv, patternX, patternY){
     coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternX, sep = ''))]),
                          y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))]),
                          DATE_ACQUIRED = as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')]),
-                         pos = as.character(test1transect[,col_of_interest(csv, 'pos$')]),
-                         axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')]),
-                         endDrop = as.numeric(test1transect[,col_of_interest(csv, 'endDrop$')]),
-                         coastDist = as.numeric(test1transect[,col_of_interest(csv, 'coastDist$')]),
-                         mudFract = as.numeric(test1transect[,col_of_interest(csv, 'mudFract$')])
+                         pos = as.character(test1transect[,col_of_interest(csv, 'pos$')])
+                         # axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')]),
+                         # endDrop = as.numeric(test1transect[,col_of_interest(csv, 'endDrop$')]),
+                         # coastDist = as.numeric(test1transect[,col_of_interest(csv, 'coastDist$')])
+                         # mudFract = as.numeric(test1transect[,col_of_interest(csv, 'mudFract$')])
                          )
+    
+    for (c in cols_to_keep){
+      # c<- cols_to_keep[1]
+      # print(c)
+      vals = as.numeric(test1transect[,col_of_interest(csv, c)])
+      coords[,paste0(c)] <- vals
+    }
     
     allPoints <- rbind(allPoints, coords)
     
@@ -103,13 +112,14 @@ reshape_csvPoints <- function(csv, patternX, patternY){
   
   # make it spatial
   SpatialPoints <- SpatialPointsDataFrame(data.frame(allPoints[,'x'], allPoints[,'y'] ), 
-                                           data = data.frame(DATE_ACQUIRED = allPoints[,'DATE_ACQUIRED'],
-                                                             pos = allPoints[,'pos'],
-                                                             axisDist = as.numeric(allPoints[,'axisDist']),
-                                                             endDrop = as.numeric(allPoints[,'endDrop']),
-                                                             coastDist = as.numeric(allPoints[,'coastDist']),
-                                                             mudFract = as.numeric(allPoints[,'mudFract'])
-                                                             ),
+                                           data = allPoints,
+                                            # data.frame(DATE_ACQUIRED = allPoints[,'DATE_ACQUIRED'],
+                                            #                  pos = allPoints[,'pos'],
+                                            #                  axisDist = as.numeric(allPoints[,'axisDist']),
+                                            #                  endDrop = as.numeric(allPoints[,'endDrop']),
+                                            #                  coastDist = as.numeric(allPoints[,'coastDist']),
+                                            #                  mudFract = as.numeric(allPoints[,'mudFract'])
+                                                             # ),
                                            proj4string=CRS("+proj=longlat +datum=WGS84"))
   points_sf <- st_as_sf(SpatialPoints)
   

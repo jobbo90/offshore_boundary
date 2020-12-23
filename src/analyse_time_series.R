@@ -46,7 +46,7 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <- c('2009')#c('2018', '2019') 
+years <- c('2018', '2019') 
 # transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
 
 # select folders
@@ -73,7 +73,7 @@ for (q in seq_along(years)) {
                              purrr::pmap_lgl(all)
                          ))
 }
-# filtered <- unique(filtered)[1:2,]
+filtered <- unique(filtered)[1:2,]
 
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
@@ -91,28 +91,51 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
 
-coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY')
-mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY')
+coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', c('coastDist'))
+keep_columns <- c('axisDist', 'mudFract', 'endDrop')  # necessary for mudbank output
+mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY', keep_columns)
 
-
-
-
-
-collection <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
+# plotting example
+collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
 
 collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
   # merge(collection)
 
+collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
+  filterBounds(ee$Geometry$Point(-55.54, 5.94))
+
+collection <- collectionL8$merge(collectionL7)$merge(collectionL5)
 
 visParams = list(
     bands = c("B5", "B4", "B3"),
     min = 0.05, max = 0.4, gamma = 1.4
   )
 
+#' implement workflow
+#' 1) filter outliers
+#'     - Filter on neighborhood (previous 2, current and next two points)
+#'     Use distance to see if the point is deviating
+#'     Consider using fraction..
+#' 2) Apply douglas pecker algorithm
+#'      - Requires to define subsections (see https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg  )
+#'      to ensure separate mudbanks are recognized
+
+
+
 for (i in uniqueDates){
   # i <- uniqueDates[2]
+  
+  # for testing: set to cloudfree
+  cloudFree <- ee$Image(collection$filter(ee$Filter$gt("CLOUD_COVER", 10))$
+                          filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
+                          sort("CLOUD_COVER")$first())
+  id <- eedate_to_rdate(cloudFree$get("system:time_start"))
+
+  i <- uniqueDates[uniqueDates == as.Date(id)]
+  
+  
   coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == i &
                                   coastlines$coastDist >= 0) 
   mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
@@ -120,6 +143,20 @@ for (i in uniqueDates){
   # order
   coastlines_selection[order(as.character(coastlines_selection$pos)),]
   mudbanks_selection[order(as.character(mudbanks_selection$pos)),]
+  
+  
+  # collection for testing
+  filtCollect <- collection$filterDate(as.character(as.Date(i)-1), as.character(as.Date(i)+1))
+  dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
+  
+  id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
+  
+  first <- Map$addLayer(filtCollect$first(), visParams, paste0(i))
+  Map$centerObject(filtCollect$first())
+  
+  
+  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
+    mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
   
   
   for (pnt in 1:nrow(mudbanks_selection)){
@@ -241,15 +278,7 @@ for (i in uniqueDates){
     points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
     
     
-    
-    # collection 
-    filtCollect <- collectionL7$filterDate(as.character(as.Date(i)-1), as.character(as.Date(i)+1))
-    
-    id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
-    
-    first <- Map$addLayer(filtCollect$first(), visParams, paste0(i))
-    Map$centerObject(filtCollect$first())
-    
+
     
 
     first +
@@ -262,10 +291,7 @@ for (i in uniqueDates){
   
   
   # https://gis.stackexchange.com/questions/68359/creating-average-polygon
-  
-  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
-    mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
-  
+
   
 
 }
@@ -273,163 +299,6 @@ for (i in uniqueDates){
 
 
 
-# test simple 2d plot coastline dist
-pos_to_test <- c('236000') # 236000: loss example / 187000: gain example with clear outliers
-testPos <- subset(allFiles, allFiles[,col_of_interest(allFiles, 'pos')] == pos_to_test
-                    & allFiles[,col_of_interest(allFiles, 'coastDist$')] >= 0 )
-testPos <- testPos[order(testPos$DATE_ACQUIRED),] #order by date
-
-# or on all entries 
-allFiles_gt0 <- subset(arrange(allFiles, pos, DATE_ACQUIRED), coastDist >=0) 
-
-# make groups of 3 months per transect
-test_allFiles <- allFiles_gt0 %>%  
-  mutate(date_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 months"))) %>%
-  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 year"))) 
-
-group_dates<-unique(test_allFiles$year_col)
-group_pos <- unique(test_allFiles$pos)
-
-# assume nothing is outlier
-test_allFiles$outlier <- 1
-
-# estimate outliers
-for(i in group_dates){
-  # i<-group_dates[group_dates == c("2017-01-01")]
-  
-  for(q in group_pos){
-    # q <- group_pos[group_pos == pos_to_test]
-    subsets <- subset(test_allFiles, year_col == i & pos == q)
-    # plot(as.Date(subsets$DATE_ACQUIRED), subsets$coastDist)
-    rownr <- strtoi(rownames(subset(test_allFiles, year_col == i & pos == q)))
-    
-    # detect outliers (give them a 0!!!)
-    test_allFiles[rownr, 'outlier'] <- rosner(subsets$coastDist)
-    
-  }
-}
-
-
-# plot per group after removing outliers
-# check i group_by actually removes the outliers!
-test_allFiles_mn <- test_allFiles %>% group_by(pos, date_col, outlier) %>%
-  mutate(mn = median(coastDist)) #%>%
-  # ungroup()
-
-
-testSubset <- subset(test_allFiles_mn, 
-                     pos == pos_to_test)
-
-outliers <- subset(testSubset, outlier == 0)
-nonOutliers <- subset(testSubset, outlier == 1)
-
-plot(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, ylim = c(min(testSubset$coastDist)-30,max(testSubset$coastDist)+ 30))
-points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
-
-# median values with steps per 3 months ()
-points(as.Date(nonOutliers$date_col), nonOutliers$mn, col = 'blue')
-
-# heatmap / space-time plot
-
-# # get for all transects an oldest coastline observation as baseline
-test_allFiles_mn$baseline <- 0 
-test_allFiles_mn$slope <- -1
-reference_date <- as.Date("2017-01-01")
-
-for (sid in allPos) {
-  # sid = pos_to_test
-  # print(sid)
-  i <- test_allFiles_mn$pos == sid # create a logical index
-  
-  # get min date with an observation
-  subsetTemp2 <- subset(test_allFiles_mn, test_allFiles_mn$pos == sid &
-                          test_allFiles_mn$coastDist >= 0) 
-                          # test_allFiles_mn$outlier != 0) # exclude detected outliers 
-  outliers <- subset(subsetTemp2, outlier == 0)
-  nonOutliers <- subset(subsetTemp2, outlier == 1)
-
-  # plot(as.Date(subsetTemp2$DATE_ACQUIRED), subsetTemp2$coastDist,ylim = c(min(subsetTemp2$coastDist)-30,max(subsetTemp2$coastDist)+ 30))
-  # points(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist, col = 'green')
-  # points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
-  
-  # you'd want to normalize for the coastline position around the reference date
-  # get first date after reference date:
-  index <- which.min(abs(as.Date(nonOutliers$DATE_ACQUIRED)-reference_date))
-  
-  if(nrow(subsetTemp2) == 0){
-    coastObs <- 0
-    slope <- 0
-    } else {
-    coastObs <- subsetTemp2[index, 'coastDist'] 
-    
-    lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
-    intercept <-lm.out$coefficients[1]
-    slope <- lm.out$coefficients[2]
-    
-    # residuals
-    resid <- lm.out$residuals
-    
-    maxResid <- which.max(abs(resid))
-    
-    # points(as.Date(nonOutliers$DATE_ACQUIRED[maxResid]), nonOutliers$coastDist[maxResid], col = 'purple')
-    
-    # firstSubset <- nonOutliers[1:maxResid,]
-    # secondSubset <- nonOutliers[maxResid:nrow(nonOutliers),]
-    # 
-    # firstSubset_lm <- lm(firstSubset$coastDist~as.numeric(as.Date(firstSubset$DATE_ACQUIRED)))
-    # secondSubset_lm <- lm(secondSubset$coastDist~as.numeric(as.Date(secondSubset$DATE_ACQUIRED)))
-    
-    # firstSubset_est <- firstSubset_lm$coefficients[1] + as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)) * firstSubset_lm$coefficients[2]
-    
-    
-    estimated <- intercept + (as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))*slope)
-    # plot the fitted line
-    # abline(lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))),
-           # lty = 2)
-    # abline(lm(firstSubset$coastDist~as.numeric(as.Date(firstSubset$DATE_ACQUIRED))), 
-    #        lty = 2)
-    # abline(lm(secondSubset$coastDist~as.numeric(as.Date(secondSubset$DATE_ACQUIRED))), 
-           # lty = 2)
-    
-    # use identify when necesary!
-    # date <- identify(as.Date(subsetTemp2$DATE_ACQUIRED), subsetTemp2$coastDist, n=1, labels=as.Date(subsetTemp2$DATE_ACQUIRED))
-    
-    # coastObs <- subsetTemp2[subsetTemp2$DATE_ACQUIRED == min(subsetTemp2[, 'DATE_ACQUIRED']), 'coastDist']
-  }
-  
-  
-  test_allFiles_mn$baseline[i] <- as.numeric(coastObs)
-  test_allFiles_mn$slope[i] <- as.numeric(slope)
-}
-
-
-# subtract each that values from each obs (ensure positive values)
-# to normalize
-test_allFiles_mn$normalized <- test_allFiles_mn$coastDist - test_allFiles_mn$baseline
-test_allFiles_mn$mn_normalized <- test_allFiles_mn$mn - test_allFiles_mn$baseline
-
-allFiles_mutate <- test_allFiles_mn %>% mutate(year = year(DATE_ACQUIRED),
-                    month = month(DATE_ACQUIRED, label=TRUE),
-                    day = day(DATE_ACQUIRED),
-                    full_date= date(DATE_ACQUIRED),
-                    full_date2= date(date_col))
-
-
-allFiles_mutate <- allFiles_mutate %>% 
-                      filter(!(coastDist == -1) & outlier == 0) # filter outliers & negative coastal distances
-
-labeled.dat <- allFiles_mutate[allFiles_mutate$pos %in% c('151000') ,]
-
-
-
-p <-ggplot(allFiles_mutate,aes(x = pos,y = full_date2, fill=mn_normalized))+ 
-  geom_tile(color= "white",size=0.1) +
-  # scale_fill_gradientn(colours=topo.colors(7),#na.value = "transparent",
-  #                      breaks=c(0,median(allFiles_mutate$coastDist)),
-  #                      labels=c("Minimum","Maximum"),
-  #                      limits=c(0,median(allFiles_mutate$coastDist)))
-  scale_fill_viridis(name="Max Distance",option ="C", limits = c(-500, 500), oob = scales::squish)
-  # geom_text(data = labeled.dat, aes(pos,full_date, label = pos), hjust = 2)
 
 
 
