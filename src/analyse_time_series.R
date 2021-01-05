@@ -95,7 +95,7 @@ coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', c('coastDist'))
 keep_columns <- c('axisDist', 'mudFract', 'endDrop', 'coastDist')  # necessary for mudbank output
 mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY', keep_columns)
 
-
+# change to NA
 mudbanks$coastDist[mudbanks$coastDist == -1] <- NA
 
 # sort al rows based on position & date
@@ -103,6 +103,8 @@ mudbanks<-mudbanks[with(mudbanks, order(pos, DATE_ACQUIRED)), ]
 
 # if coastDist = -1; replace with nearest observations
 mudbanks$dist_locf <- na.locf(mudbanks$coastDist, option = "locf")   # Last Obs. Carried Forward
+# this becomes a problem if the value before this is a nonsense value..
+
 
 # normalize mudbank Distance:
 mudbanks$distance <- mudbanks$axisDist - mudbanks$dist_locf   
@@ -151,28 +153,71 @@ for (i in uniqueDates){
   coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == i &
                                   coastlines$coastDist >= 0) 
   mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
-                                mudbanks$axisDist >= 0) 
+                                mudbanks$axisDist >= 0 & 
+                                mudbanks$distance >= 0) # still to test....
+  
+  # give all excluded observation an 1 for outlier in original
+  # to keep track of all outliers.
+  mudbanks[which(mudbanks$DATE_ACQUIRED == i & 
+                   mudbanks$axisDist < 0 &
+                   mudbanks$distance < 0), "outlier"] <-
+    as.data.frame(mudbanks[
+      which(mudbanks$DATE_ACQUIRED == i & 
+              mudbanks$axisDist < 0 &
+              mudbanks$distance < 0),"outlier"])[,1] + 1
+  
+  
 
   # order
   coastlines_selection[order(as.character(coastlines_selection$pos)),]
-  mudbanks_selection[order(as.character(mudbanks_selection$pos)),]
+  mudbanks_selection<-mudbanks_selection[order(as.numeric(as.character(mudbanks_selection$pos))),]
 
   # collection for testing
   filtCollect <- collection$filterDate(as.character(as.Date(i)-1), as.character(as.Date(i)+1))
   dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
   
-  # id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
-  
   first <- Map$addLayer(filtCollect$first(), visParams, paste0(i))
   Map$centerObject(filtCollect$first())
   
   # plot
-  # first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
-    # mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
-
+  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = 'coastline') +
+    mapview(mudbanks_selection, col.regions = c("green"), layer.name = 'mudbanks' )
+  
+  
+  # outlier test full set of points:
+  positions_all <- as.numeric(as.character(mudbanks_selection$pos))
+  distances_all <-mudbanks_selection$distance # grap the normalized distances
+  
+  # plot(positions_all, distances_all)
+  
+  lm_out_all <-lm(distances_all ~ poly(as.numeric(positions_all),2))
+  
+  predicted.intervals <- predict(lm_out_all,
+                                 data.frame(x=as.numeric(positions_all)),
+                                 interval='confidence', level=0.99)
+  # lines(positions_all, predicted.intervals[,1],col='green',lwd=3)
+  
+  outlier_test <- car::outlierTest(lm_out_all) # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
+  outlier_ind<-as.numeric(names(outlier_test$rstudent))
+  # points(positions_all[outlier_ind],distances_all[outlier_ind], col = 'red')
+  
+  # Or give outlier +1 in the source
+  mudbanks[which(mudbanks$DATE_ACQUIRED == i & 
+             mudbanks$pos %in% positions_all[outlier_ind]), "outlier"] <-
+    as.data.frame(mudbanks[
+      which(mudbanks$DATE_ACQUIRED == i & 
+              mudbanks$pos %in% positions_all[outlier_ind]),"outlier"])[,1] + 1
+  
+  
+  # drop the most obvious outliers from the selection
+  mudbanks_selection <- mudbanks_selection[-outlier_ind, ]
+  
+  
+  # sanity check:
+  # points( as.numeric(as.character(mudbanks_selection$pos)), mudbanks_selection$distance, col = 'blue')
   
   for (pnt in 1:nrow(mudbanks_selection)){
-    # pos_of_interst <- 	206000 #130000
+    # pos_of_interst <- 195000 #130000
     # selected_point <-mudbanks_selection[which(mudbanks_selection$pos == pos_of_interst),]
     selected_point <-mudbanks_selection[pnt,]
     
@@ -230,88 +275,117 @@ for (i in uniqueDates){
     # start = c(b = 195000, a =3000),algorithm = "plinear"
     # )#
 
-    plot(positions, distances)
-    abline(lm(datatest$distances~as.numeric(datatest$positions)),lty = 2)
-    
+    # plot(positions, distances)
+    # abline(lm(datatest$distances~as.numeric(datatest$positions)),lty = 2)
+    # lines(lm(datatest$distances ~ poly(as.numeric(datatest$positions),2)))
     # plot(positions,fractions, col ='red')
     # abline(lm(datatest$fractions~as.numeric(datatest$positions)),lty = 2)
     
     # plot(fractions, distances, col = 'blue')
     # abline(lm(datatest$distances~as.numeric(datatest$fractions)),lty = 2)
     # 
+
     
-    # calculate linear fit
-    lm.out <- lm(datatest$distances~as.numeric(datatest$positions))
+    # when sufficient observations calculate second order polynomial
+    if (length(unique(datatest$distances)) > 1) {
+      
+      
+      # # calculate linear fit
+      # lm.out <- lm(datatest$distances~as.numeric(datatest$positions))
+      
+      # calculate second order polynomial 
+      lm.out<-lm(datatest$distances ~ poly(as.numeric(datatest$positions),2))
+      r2 <- summary(lm.out)$r.squared # or adjusted r2?
+      
+      # or B-splines?
+      # splines <- lm(datatest$distances ~ bs(as.numeric(datatest$positions), df = 10))
+      
+      # points(positions,lm.out$fitted.values, col = 'red')
+      # summary(lm.out)
+      # plot(fitted(lm.out),residuals(lm.out))
+      
+      # predicted.intervals <- predict(lm.out,data.frame(x=as.numeric(datatest$positions)),interval='confidence',
+      # level=0.99)
+      # lines(as.numeric(datatest$positions), predicted.intervals[,1],col='green',lwd=3)
+      
+      # points(positions,lm.out$fitted.values)
+      intercept <-lm.out$coefficients[1]
+      slope <- lm.out$coefficients[2]
+      # potential benefit: slope says something about direction; negative slope; front of mudbank
+      # low pos > further east, decreasing distance ==> front of mud bank. 
+      
+      # residuals
+      resid <- lm.out$residuals
+      maxResid <- which.max(abs(resid))
+      # if maxResid is same as selected point
+      # remove it? ==> probably give indication that it needs to be dropped when all computations are finished
+      # yet there is allways a largest residual, not perse a significant one...
+      
+      
+      # Perhaps consider the running for outliers again/pos
+      
+      
+      # # distance > 1 considered as outlier?
+      # cooksd <- cooks.distance(lm.out)
+      # plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance") 
+      # abline(h = 4*mean(cooksd, na.rm=T), col="red")
+      # 
+      # influential <- as.numeric(names(cooksd)[(cooksd > (4/nrow(datatest)))])
+      # 
+      # # outliers test?
+      # library(outliers)
+      # out_dist <- outlier(distances) # max from mean
+      # score_dist <- scores(distances) # x-mean/sd
+      # chi_score_dist <- scores(distances, type="chisq", prob = 0.75)     
+      # 
+      # scores(distances, type="z", prob=0.95)  # beyond 95th %ile based on z-scores
+      # scores(distances, type="t", prob=0.95)  # beyond 95th %ile based on t-scores
+      # 
+      
+      outlier_test <- car::outlierTest(lm.out) # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
+      
+      # if no outliers detected:
+      
+      # allways returns one point? Even if it is random
+      outlierIndex <- ifelse(length(outlier_test$rstudent) > 0,
+                             as.numeric(as.character(combined_ordered[as.numeric(names(outlier_test$rstudent)),]$pos)),
+                             min(as.numeric(as.character(mudbanks_selection$pos)))-1000)
+      
+      # drop outlier ==> not sure if necessary 
+      # new_dataTest <- datatest[-outlierIndex,]
+      
+      # test if it influences the regression line? or is the outlier test sufficient?
+      
+
+      # for (ind in 1:length(outlierIndex)){
+      #   corresponding_pos <- as.numeric(as.character(combined_ordered[outlierIndex,]$pos))
+      #   
+      #   
+      #   mudbanks[which(mudbanks$pos == corresponding_pos & 
+      #                    mudbanks$DATE_ACQUIRED == i), "outlier"] <- 
+      #     as.data.frame(mudbanks[which(row.names(mudbanks) == row.names(selected_point)),"outlier"])[,1] + 1
+      #     
+      # }  
+      
+      
+    } else { # stop("'degree' must be less than number of unique points")
+      
+      # if only 1 observation; cannot determine if outlier based on neighbours
+      outlierIndex <- min(as.numeric(as.character(mudbanks_selection$pos)))-1000
+      
+    }
+      
     
-    # points(positions,lm.out$fitted.values)
-    intercept <-lm.out$coefficients[1]
-    slope <- lm.out$coefficients[2]
-    # potential benefit: slope says something about direction; negative slope; fron of mudbank
-    # low pos > further east, decreasing distance ==> front of mud bank. increasing 
     
-    #improve;
-    # calculate these stats per year.
-    
-    # residuals
-    resid <- lm.out$residuals
-    maxResid <- which.max(abs(resid))
-    # if maxResid is same as selected point
-    # remove it? ==> probably give indication that it needs to be dropped when all computations are finished
-    # yet there is allways a largest residual, not perse a significant one...
-    
-    
-    # Perhaps consider the running for outliers again/pos
-     
-    
-    # # distance > 1 considered as outlier?
-    # cooksd <- cooks.distance(lm.out)
-    # plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance") 
-    # abline(h = 4*mean(cooksd, na.rm=T), col="red")
-    # 
-    # influential <- as.numeric(names(cooksd)[(cooksd > (4/nrow(datatest)))])
-    # 
-    # # outliers test?
-    # library(outliers)
-    # out_dist <- outlier(distances) # max from mean
-    # score_dist <- scores(distances) # x-mean/sd
-    # chi_score_dist <- scores(distances, type="chisq", prob = 0.75)     
-    # 
-    # scores(distances, type="z", prob=0.95)  # beyond 95th %ile based on z-scores
-    # scores(distances, type="t", prob=0.95)  # beyond 95th %ile based on t-scores
-    # 
-    
-    outlier_test <- car::outlierTest(lm.out) # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
-    
-    # if no outliers detected:
-    
-    # allways returns one point? Even if it is random
-    outlierIndex <- ifelse(length(outlier_test$rstudent) > 0,
-                           as.numeric(as.character(combined_ordered[as.numeric(names(outlier_test$rstudent)),]$pos)),
-                           min(as.numeric(as.character(mudbanks_selection$pos)))-1000)
-    
-    # drop outlier ==> not sure if necessary 
-    # new_dataTest <- datatest[-outlierIndex,]
-    
-    # test if it influences the regression line? or is the outlier test sufficient?
     
     if (outlierIndex == as.numeric(as.character(selected_point$pos))){
-    # or consider allways giving +1 when detected as outlier?
+      # or consider allways giving +1 when detected as outlier?
       mudbanks[which(row.names(mudbanks) == row.names(selected_point)), "outlier"] <-
-            as.data.frame(mudbanks[
-              which(row.names(mudbanks) == 
-                      row.names(selected_point)),"outlier"])[,1] + 1
-
+        as.data.frame(mudbanks[
+          which(row.names(mudbanks) == 
+                  row.names(selected_point)),"outlier"])[,1] + 1
+      
     }
-    # for (ind in 1:length(outlierIndex)){
-    #   corresponding_pos <- as.numeric(as.character(combined_ordered[outlierIndex,]$pos))
-    #   
-    #   
-    #   mudbanks[which(mudbanks$pos == corresponding_pos & 
-    #                    mudbanks$DATE_ACQUIRED == i), "outlier"] <- 
-    #     as.data.frame(mudbanks[which(row.names(mudbanks) == row.names(selected_point)),"outlier"])[,1] + 1
-    #     
-    # }  
-  
     
 
     
