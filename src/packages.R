@@ -22,6 +22,8 @@ library(jsonlite) # required for mapView
 library(zoo)
 library(EnvStats) # for rosnerTest
 library(lubridate) # for year/month etc.
+library(zoo)      # for na.locf
+library(car)      # for outlierTest
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)

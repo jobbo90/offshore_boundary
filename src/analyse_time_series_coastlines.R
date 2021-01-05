@@ -46,7 +46,10 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <- c('2015')#c('2018', '2019') 
+years <- c('2007', '2008', '2009')#c('2018', '2019') 
+aoi <- c('Suriname') # 'Suriname', 'Braamspunt', 'WegNaarZee'
+
+
 # transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
 
 # select folders
@@ -58,20 +61,24 @@ df <- df[grep('.csv', folderSelect, ignore.case = T),]
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
+  for (x in seq_along(aoi)){
+    year = years[q]
+    region = aoi[x]
+    
+    filters = c(year, region)
+    
+    filtered = rbind(filtered, df %>% 
+                       dplyr::filter(
+                         filters %>%
+                           # apply the filter of all the text rows for each pattern
+                           # you'll get one list of logical by pattern ignored_string
+                           purrr::map(~ to_keep(.x, text = text)) %>%
+                           # get a logical vector of rows to keep
+                           purrr::pmap_lgl(all)
+                       ))
+  }
       # q <- 1
-      year = years[q]
-      
-      filters = c(year)
-      
-      filtered = rbind(filtered, df %>% 
-                         dplyr::filter(
-                           filters %>%
-                             # apply the filter of all the text rows for each pattern
-                             # you'll get one list of logical by pattern ignored_string
-                             purrr::map(~ to_keep(.x, text = text)) %>%
-                             # get a logical vector of rows to keep
-                             purrr::pmap_lgl(all)
-                         ))
+
 }
 # filtered <- unique(filtered)[1:2,]
 
@@ -108,22 +115,31 @@ visParams = list(
 #-------
 
 # # get all transects on the same date 
-reference_date <- as.Date("2019-06-01")
+reference_date <- as.Date("2008-06-03")
 
 
 # collection 
-collection <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
-  filter(ee$Filter$lt("CLOUD_COVER", 25))$
+collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
 
+collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
+  filterBounds(ee$Geometry$Point(-55.54, 5.94))
 
-filtCollect <- collection$filterDate(as.character(reference_date-60), as.character(reference_date+60))
+collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
+  filterBounds(ee$Geometry$Point(-55.54, 5.94))
+
+collection <- collectionL8$merge(collectionL7)$merge(collectionL5)$
+  filter(ee$Filter$lt("CLOUD_COVER", 75))
+  
+
+
+filtCollect <- collection$filterDate(as.character(reference_date-120), as.character(reference_date+120))
 # ee_print(filtCollect)
 dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
-image <- ee$Image(filtCollect$sort("CLOUD_COVER")$first())
+image <- ee$Image(filtCollect$sort("CLOUD_COVER")$first())   #
 
-id <- eedate_to_rdate(image$get("system:time_start"))
+id <- eedate_to_rdate(image$get("system:time_start")) 
 
 first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
 Map$centerObject(filtCollect$first())

@@ -92,8 +92,23 @@ geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
 
 coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', c('coastDist'))
-keep_columns <- c('axisDist', 'mudFract', 'endDrop')  # necessary for mudbank output
+keep_columns <- c('axisDist', 'mudFract', 'endDrop', 'coastDist')  # necessary for mudbank output
 mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY', keep_columns)
+
+
+mudbanks$coastDist[mudbanks$coastDist == -1] <- NA
+
+# sort al rows based on position & date
+mudbanks<-mudbanks[with(mudbanks, order(pos, DATE_ACQUIRED)), ]
+
+# if coastDist = -1; replace with nearest observations
+mudbanks$dist_locf <- na.locf(mudbanks$coastDist, option = "locf")   # Last Obs. Carried Forward
+
+# normalize mudbank Distance:
+mudbanks$distance <- mudbanks$axisDist - mudbanks$dist_locf   
+
+# set outlier to 0
+mudbanks$outlier <- 0
 
 # plotting example
 collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
@@ -121,178 +136,282 @@ visParams = list(
 #' 2) Apply douglas pecker algorithm
 #'      - Requires to define subsections (see https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg  )
 #'      to ensure separate mudbanks are recognized
+#'      
 
-
+# for testing: set to cloudfree
+cloudFree <- ee$Image(collection$filter(ee$Filter$gt("CLOUD_COVER", 0))$
+                        filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
+                        sort("CLOUD_COVER")$first())
+id <- eedate_to_rdate(cloudFree$get("system:time_start"))
 
 for (i in uniqueDates){
-  # i <- uniqueDates[2]
-  
-  # for testing: set to cloudfree
-  cloudFree <- ee$Image(collection$filter(ee$Filter$gt("CLOUD_COVER", 10))$
-                          filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
-                          sort("CLOUD_COVER")$first())
-  id <- eedate_to_rdate(cloudFree$get("system:time_start"))
-
-  i <- uniqueDates[uniqueDates == as.Date(id)]
-  
+  # i <- uniqueDates[3]
+  # i <- uniqueDates[uniqueDates == as.Date(id)]
   
   coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == i &
                                   coastlines$coastDist >= 0) 
   mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
                                 mudbanks$axisDist >= 0) 
+
   # order
   coastlines_selection[order(as.character(coastlines_selection$pos)),]
   mudbanks_selection[order(as.character(mudbanks_selection$pos)),]
-  
-  
+
   # collection for testing
   filtCollect <- collection$filterDate(as.character(as.Date(i)-1), as.character(as.Date(i)+1))
   dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
   
-  id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
+  # id <- eedate_to_rdate(filtCollect$first()$get("system:time_start"))
   
   first <- Map$addLayer(filtCollect$first(), visParams, paste0(i))
   Map$centerObject(filtCollect$first())
   
-  
-  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
-    mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
-  
+  # plot
+  # first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
+    # mapview(mudbanks_selection, col.regions = c("green"), layer.name = i )
+
   
   for (pnt in 1:nrow(mudbanks_selection)){
-    # pnt <- 100
-    # pos_of_interst <- 223000
+    # pos_of_interst <- 	206000 #130000
+    # selected_point <-mudbanks_selection[which(mudbanks_selection$pos == pos_of_interst),]
+    selected_point <-mudbanks_selection[pnt,]
     
-    # selected_point <-mudbanks_selection[pnt,]
-    selected_point <-mudbanks_selection[which(mudbanks_selection$pos == pos_of_interst),]
     
     # select nearby points
     # a) nearest 2?
     # b) based on pos
-    ajoining_points <- subset(mudbanks_selection, as.character(pos) <=  as.numeric(as.character(selected_point$pos))+2000 &
-                                as.character(pos) >= as.numeric(as.character(selected_point$pos))-2000 &
+    ajoining_points <- subset(mudbanks_selection, as.character(pos) <=  as.numeric(as.character(selected_point$pos))+4000 &
+                                as.character(pos) >= as.numeric(as.character(selected_point$pos))-4000 &
                                 as.character(pos) != as.numeric(as.character(selected_point$pos)))
     
-    geom <- st_coordinates(ajoining_points)
-    test_spline<-smooth.spline(geom[,1] ~ geom[,2], spar=0.50)
+    combined <- rbind(selected_point,ajoining_points)
     
-    SpatialPoints <- SpatialPointsDataFrame(data.frame(test_spline$y, test_spline$x ), 
-                                            data = data.frame(DATE_ACQUIRED = ajoining_points$DATE_ACQUIRED,
-                                                              mudFract = ajoining_points$mudFract),
-                                            proj4string=CRS("+proj=longlat +datum=WGS84"))
+    # order by pos
+    combined_ordered <-combined[order(as.numeric(as.character(combined$pos))),]
     
-    # points_sf <- st_as_sf(SpatialPoints)
+    # plot selected points
+    # first +
+      # mapview(mudbanks_selection, col.regions = c("blue"), layer.name = c('mudbanks_selection')) +
+      # mapview(selected_point, col.regions = c("red"), layer.name = c('selected_point')) +
+      # mapview(ajoining_points, col.regions = c("green"), layer.name = c('ajoining_points'))
+
+    # plot(st_coordinates(combined)[,'X'], st_coordinates(combined)[,'Y'],
+         # ylim = c(min(c(combined$y, selected_point$y)),max(c(combined$y, selected_point$y))))
+
+    # points(st_coordinates(selected_point)[,'X'], st_coordinates(selected_point)[,'Y'], col = 'red') # point of interest
+
     
-    # plot ajoining points
-    plot(test_spline$x, test_spline$y)
-    points(st_coordinates(selected_point)[,'Y'], st_coordinates(selected_point)[,'X'], col = 'blue') # point of interest
-    segments(test_spline$x[1],test_spline$y[1],  
-             test_spline$x[length(test_spline$x)], test_spline$y[length(test_spline$y)])            # linear fit
+    # segments(test_spline$y[1],test_spline$x[1],
+    #          test_spline$y[length(test_spline$y)], test_spline$x[length(test_spline$x)])            # linear fit
     
     # distance from selected point to fitting line 
-    dist <- shortestDistanceToLines(Mx=st_coordinates(selected_point)[,'Y'],My=st_coordinates(selected_point)[,'X'], 
-                            Ax=test_spline$x[1],Ay=test_spline$y[1], 
-                            Bx=test_spline$x[length(test_spline$x)],By=test_spline$y[length(test_spline$y)])
-    
-    
-    plot(ajoining_points$axisDist,ajoining_points$mudFract)
-    points(selected_point$axisDist, selected_point$mudFract, col = 'blue')
-    
-    # if dist < threshold (e.g. 0.01?) then keep
-    # else check for index value, if sufficient: keep it 
-    # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
-    # http://www.geoinfo.info/proceedings_geoinfo2006.split/paper1.pdf
-    # https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg 
-    
-    # test douglasPeuckerEpsilon
-    # library(kmlShape)
-    
-    
-    transform<-st_transform(mudbanks_selection, 32621)
-    geom <- cbind(st_coordinates(mudbanks_selection), pos = as.numeric(as.character(mudbanks_selection$pos)))
-    
-    # order on position 
-    geom_ordered <- geom[order(geom[,'pos']),]
-    
-    range <- 9:16 # for testing
-    
-    plot( geom_ordered[range,1], geom_ordered[range,2],type="p") # original points
-    points( geom_ordered[range[1],1], geom_ordered[range[1],2],type="p", col = 'blue') # begin point
-    functionD <- DouglasPeuckerEpsilon(trajx = geom_ordered[range,1],trajy = geom_ordered[range,2], epsilon = 0.01, spar = NA)
-    # testD <- DouglasPeuckerNbPoints( geom_ordered[range,1], trajy = geom_ordered[range,2], 2, spar=NA)
-    # points( testD[,1], testD[,2],type="p", col = 'red')
-    points( functionD[,1], functionD[,2],type="p", col = 'red')
+    # dist <- shortestDistanceToLines(Mx=st_coordinates(selected_point)[,'Y'],My=st_coordinates(selected_point)[,'X'], 
+    #                         Ax=test_spline$x[1],Ay=test_spline$y[1], 
+    #                         Bx=test_spline$x[length(test_spline$x)],By=test_spline$y[length(test_spline$y)])
 
-      points( functionD[,1], functionD[,2],type="p", col = 'red')
+        # m<-nls(y~a*x/(b+x))
+    # 2nd degree Parabolic:
+    # z = a + bx + cy + ex2 + fy2
+    # Minimum number of points required: 5
     
-    # douglas pecker algorithm looks at the points that are furthest away from line, if large enough: included as vertext.
-    # this assumes outliers are filtered sufficiently
-    # e.g. first filter (e.g. by using a spline function (spar in Douglas function))
-    # or manual filter that looks at a combination of distance on a line, and the fraction (within a range)
+    # 2nd degree: z = a + bx + cy + dxy + ex2 + fy2
+    # a + (positions*b) + (c*positions) + (d*x*y) + e*x^2 + f*y^2
     
-    # Alternatively; inverse of douglas filtering. 
-    # Look at point, if it's distance is to far away exclude it
-    # But that will only work if whe apply it on sub polylines that are on a imaginary line that corresponds to a boundary
-    # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+    positions<- as.numeric(as.character(combined_ordered$pos))
+    distances <-combined_ordered$distance # grap the normalized distances
+    fractions <- combined_ordered$mudFract
+    datatest <- data.frame(positions=positions,distances=distances, fractions = fractions)
     
-    findClosestPoint_manual <- function(trajx,trajy){
-      
-      # trajx <- geom_ordered[range,1]
-      # trajy <- geom_ordered[range,2]
-      
-      dmax <- 1
-      index <- 1
-      end <- length(trajx)
-      
-      if(end==2){
-        index <- 1
-        dmax <- 0
-      }else{
-        for(i in 2:(end-1)){ # for each point but the first and last
-          i <- 2
-          # calculate the distance
-          d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
-          if ( d < dmax ) {
-            # update dmax & index with the distance
-            # in the end only the max distance is included (due to the if(d>dmax))
-            index <- i
-            dmax <- d
-          }else{} # don't do anything
-        }
-      }
-      
-      output <- c(index, dmax)
-      names(output) <- c('index', 'dmax')
-      
-      return(output)
-      # return(c(index=index,dmax=dmax))
+    # test <- loess(distances ~ a +(positions*b) + (c*positions) + (d*positions*distances) + e*positions^2 + f*distances^2,
+    #               data = datatest,
+    #               start = list(a=1, b = 1, c = 1, d = 1, e = 1, f =1), span=.75)
+    # # https://stats.stackexchange.com/questions/176361/trouble-in-fitting-data-to-a-curve-nls?noredirect=1&lq=1
+    # e <- nls(distances~a*positions/(b+positions), #
+    # start = c(b = 195000, a =3000),algorithm = "plinear"
+    # )#
+
+    plot(positions, distances)
+    abline(lm(datatest$distances~as.numeric(datatest$positions)),lty = 2)
+    
+    # plot(positions,fractions, col ='red')
+    # abline(lm(datatest$fractions~as.numeric(datatest$positions)),lty = 2)
+    
+    # plot(fractions, distances, col = 'blue')
+    # abline(lm(datatest$distances~as.numeric(datatest$fractions)),lty = 2)
+    # 
+    
+    # calculate linear fit
+    lm.out <- lm(datatest$distances~as.numeric(datatest$positions))
+    
+    # points(positions,lm.out$fitted.values)
+    intercept <-lm.out$coefficients[1]
+    slope <- lm.out$coefficients[2]
+    # potential benefit: slope says something about direction; negative slope; fron of mudbank
+    # low pos > further east, decreasing distance ==> front of mud bank. increasing 
+    
+    #improve;
+    # calculate these stats per year.
+    
+    # residuals
+    resid <- lm.out$residuals
+    maxResid <- which.max(abs(resid))
+    # if maxResid is same as selected point
+    # remove it? ==> probably give indication that it needs to be dropped when all computations are finished
+    # yet there is allways a largest residual, not perse a significant one...
+    
+    
+    # Perhaps consider the running for outliers again/pos
+     
+    
+    # # distance > 1 considered as outlier?
+    # cooksd <- cooks.distance(lm.out)
+    # plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance") 
+    # abline(h = 4*mean(cooksd, na.rm=T), col="red")
+    # 
+    # influential <- as.numeric(names(cooksd)[(cooksd > (4/nrow(datatest)))])
+    # 
+    # # outliers test?
+    # library(outliers)
+    # out_dist <- outlier(distances) # max from mean
+    # score_dist <- scores(distances) # x-mean/sd
+    # chi_score_dist <- scores(distances, type="chisq", prob = 0.75)     
+    # 
+    # scores(distances, type="z", prob=0.95)  # beyond 95th %ile based on z-scores
+    # scores(distances, type="t", prob=0.95)  # beyond 95th %ile based on t-scores
+    # 
+    
+    outlier_test <- car::outlierTest(lm.out) # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
+    
+    # if no outliers detected:
+    
+    # allways returns one point? Even if it is random
+    outlierIndex <- ifelse(length(outlier_test$rstudent) > 0,
+                           as.numeric(as.character(combined_ordered[as.numeric(names(outlier_test$rstudent)),]$pos)),
+                           min(as.numeric(as.character(mudbanks_selection$pos)))-1000)
+    
+    # drop outlier ==> not sure if necessary 
+    # new_dataTest <- datatest[-outlierIndex,]
+    
+    # test if it influences the regression line? or is the outlier test sufficient?
+    
+    if (outlierIndex == as.numeric(as.character(selected_point$pos))){
+    # or consider allways giving +1 when detected as outlier?
+      mudbanks[which(row.names(mudbanks) == row.names(selected_point)), "outlier"] <-
+            as.data.frame(mudbanks[
+              which(row.names(mudbanks) == 
+                      row.names(selected_point)),"outlier"])[,1] + 1
+
     }
-    
-    nearestPoint <- findClosestPoint_manual(geom_ordered[range,1],geom_ordered[range,2])
-    points( geom_ordered[nearestPoint['index'],1], geom_ordered[nearestPoint['index'],2],type="p", col = 'green')
-    segments(trajx[1],trajy[1],  trajx[end], trajy[end])
-    
-    
-    farestPoint <- findFarestPoint_manual(geom_ordered[range,1], geom_ordered[range,2])
-    
-    points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
-    
-    
-
+    # for (ind in 1:length(outlierIndex)){
+    #   corresponding_pos <- as.numeric(as.character(combined_ordered[outlierIndex,]$pos))
+    #   
+    #   
+    #   mudbanks[which(mudbanks$pos == corresponding_pos & 
+    #                    mudbanks$DATE_ACQUIRED == i), "outlier"] <- 
+    #     as.data.frame(mudbanks[which(row.names(mudbanks) == row.names(selected_point)),"outlier"])[,1] + 1
+    #     
+    # }  
+  
     
 
-    first +
-      mapview(mudbanks_selection, col.regions = c("blue"), layer.name = c('mudbanks_selection')) +
-      mapview(selected_point, col.regions = c("red"), layer.name = c('selected_point')) +
-      mapview(ajoining_points, col.regions = c("green"), layer.name = c('ajoining_points')) +
-      mapview(SpatialPoints, col.regions = c("yellow"), layer.name = c('spline')) 
     
+
+
   }
+  # plot & redefine mudbank selection
+  mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
+                                mudbanks$axisDist >= 0 & 
+                                outlier == 0) 
+  mudbank_selection_Outlier <- subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
+                                        mudbanks$axisDist >= 0 &
+                                        outlier >= 1)
+  
+  first+mapview(coastlines_selection, col.regions = c("red"), layer.name = i) +
+    mapview(mudbanks_selection, col.regions = c("green"), layer.name = 'non outlier' ) +
+    mapview(mudbank_selection_Outlier, col.regions = c("orange"), layer.name = 'outlier' )
   
   
-  # https://gis.stackexchange.com/questions/68359/creating-average-polygon
+  # geom <- st_coordinates(ajoining_points)
+  # test_spline<-smooth.spline(geom[,1] ~ geom[,2], spar=0.50)
+  # 
+  # SpatialPoints <- SpatialPointsDataFrame(data.frame(test_spline$y, test_spline$x ), 
+  #                                         data = data.frame(DATE_ACQUIRED = ajoining_points$DATE_ACQUIRED,
+  #                                                           mudFract = ajoining_points$mudFract),
+  #                                         proj4string=CRS("+proj=longlat +datum=WGS84"))
+  
+  # points_sf <- st_as_sf(SpatialPoints)
+    # https://gis.stackexchange.com/questions/68359/creating-average-polygon
+  
+  
+  # if dist < threshold (e.g. 0.01?) then keep
+  # else check for index value, if sufficient: keep it 
+  # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+  # http://www.geoinfo.info/proceedings_geoinfo2006.split/paper1.pdf
+  # https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg 
+  
+  # test douglasPeuckerEpsilon
+  # library(kmlShape)
+  
+  # plot(combined_ordered$x, combined_ordered$y)
+  # functionD <- DouglasPeuckerEpsilon(trajx = combined_ordered$x,trajy = combined_ordered$y, epsilon = 0.0001, spar = NA)
+  # testD <- DouglasPeuckerNbPoints( geom_ordered[range,1], trajy = geom_ordered[range,2], 2, spar=NA)
+  # points( testD[,1], testD[,2],type="p", col = 'red')
+  # points( functionD[,1], functionD[,2],type="p", col = 'red')
+  
+  
+  # douglas pecker algorithm looks at the points that are furthest away from line, if large enough: included as vertext.
+  # this assumes outliers are filtered sufficiently
+  # e.g. first filter (e.g. by using a spline function (spar in Douglas function))
+  # or manual filter that looks at a combination of distance on a line, and the fraction (within a range)
+  
+  # Alternatively; inverse of douglas filtering. 
+  # Look at point, if it's distance is to far away exclude it
+  # But that will only work if whe apply it on sub polylines that are on a imaginary line that corresponds to a boundary
+  # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+  
+#   findClosestPoint_manual <- function(trajx,trajy){
+# 
+#   trajx <- geom_ordered[range,1]
+#   trajy <- geom_ordered[range,2]
+# 
+#   dmax <- 1
+#   index <- 1
+#   end <- length(trajx)
+#   
+#   if(end==2){
+#     index <- 1
+#     dmax <- 0
+#   }else{
+#     for(i in 2:(end-1)){ # for each point but the first and last
+#       i <- 2
+#       # calculate the distance
+#       d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
+#       if ( d < dmax ) {
+#         # update dmax & index with the distance
+#         # in the end only the max distance is included (due to the if(d>dmax))
+#         index <- i
+#         dmax <- d
+#       }else{} # don't do anything
+#     }
+#   }
+#   
+#   output <- c(index, dmax)
+#   names(output) <- c('index', 'dmax')
+#   
+#   return(output)
+#   # return(c(index=index,dmax=dmax))
+# }
 
+  # nearestPoint <- findClosestPoint_manual(geom_ordered[range,1],geom_ordered[range,2])
+  # points( geom_ordered[nearestPoint['index'],1], geom_ordered[nearestPoint['index'],2],type="p", col = 'green')
+  # segments(trajx[1],trajy[1],  trajx[end], trajy[end])
   
+  
+  # farestPoint <- findFarestPoint_manual(geom_ordered[range,1], geom_ordered[range,2])
+  
+  # points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
+  
+    
 
 }
 
@@ -345,7 +464,20 @@ for (i in uniqueDates){
 
 
 
-
+# median position?
+# # library(ICSNP)
+# cov.matrix <- matrix(c(3,2,1,2,4,-0.5,1,-0.5,2), ncol=3)
+# X <- rmvnorm(100, c(0,0,0), cov.matrix)
+# spatial.median(X)
+# 
+# # library(Gmedian)
+# n <- 1e4
+# d <- 500
+# x <- matrix(rnorm(n*d,sd=1/sqrt(d)), n, d)
+# x <- t(apply(x,1,cumsum))
+# 
+# plot(x)
+# median.est = Gmedian(x)
 
 
 
@@ -369,3 +501,92 @@ for (i in uniqueDates){
 # testPos$outlier[indices] <- 1 # FALSE
 # # plot outliers
 # points(as.Date(testPos$DATE_ACQUIRED[testPos$outlier == 0]),testPos$coastDist[testPos$outlier == 0], col = 'red')
+
+# 
+# x  <- runif(50,1,30)
+# y  <- dnorm(x,10,2)*10+rnorm(50,0,.2)
+# y1 <- y+5+x*.09 # This is the data
+# xo <- order(x)
+# starts <- gausslin.start(x,y1)
+# ystart <- with(starts, As*exp(-((x-Bs)/Cs)^2)+Ds*x+Es)
+# plot(x,y1)
+# lines(x[xo],ystart[xo],col=2)
+# 
+
+
+
+# positions<- as.numeric(as.character(combined_ordered$pos))
+# distances <-combined_ordered$axisDist
+# x<-seq(0,50,1)
+# y<-((runif(1,10,20)*x)/(runif(1,0,10)+x))+rnorm(51,0,1)
+
+# starts2 <- gausslin.start(positions, distances)
+# ystart2 <-with(starts2, As*exp(-((x-Bs)/Cs)^2)+Ds*x+Es)
+# xo <- order(positions)
+# plot(positions, distances)
+# lines(positions[xo],ystart2[xo],col=2)
+# 
+# 
+# 
+# gausslin.start <- function(x,y) {
+#   # https://stats.stackexchange.com/questions/62995/how-to-choose-initial-values-for-nonlinear-least-squares-fit
+#   # x <- positions
+#   # y <- distances
+#   
+#   theilreg <- function(x,y){
+#     yy <- outer(y, y, "-")
+#     xx <- outer(x, x, "-")
+#     z  <- yy / xx
+#     slope     <- median(z[lower.tri(z)])
+#     intercept <- median(y - slope * x)
+#     cbind(intercept=intercept,slope=slope)
+#   }
+#   
+#   
+#   # plot(x,y)
+#   tr <- theilreg(x,y)
+#   abline(tr,col=4)
+#   Ds = tr[2] # slope
+#   Es = tr[1] # intercept
+#   
+#   
+#   # yf = y-(Ds*x)-Es # Y = ax+b
+#   
+#   yf  <- y-Ds*x-Es 
+#   yfl <- loess(yf~x,span=.75)
+#   
+#   # assumes there are enough points that the maximum there is 'close enough' to 
+#   #  the true maximum
+#   
+#   yflf   <- yfl$fitted    
+#   # plot(x, yflf)
+#   locmax <- yflf==max(yflf)
+#   Bs     <- x[locmax]    # peak index
+#   As     <- yflf[locmax] # peak value
+#   
+#   qs     <- y>.6*As # yflf>.6*As
+#   ys     <- yfl$fitted[qs]
+#   xs     <- x[qs]-Bs
+#   lf     <- lm(ys~xs+I(xs^2))
+#   bets   <- lf$coefficients
+#   Bso    <- Bs
+#   Bs     <- Bso-bets[2]/bets[3]/2
+#   Cs     <- sqrt(-1/bets[3])
+#   ystart <- As*exp(-((x-Bs)/Cs)^2)+Ds*x+Es
+#   
+#   y1a <- y-As*exp(-((x-Bs)/Cs)^2)
+#   tr  <- theilreg(x,y1a)
+#   Ds  <- tr[2]
+#   Es  <- tr[1]
+#   res <- data.frame(As=As, Bs=Bs, Cs=Cs, Ds=Ds, Es=Es)
+#   res
+# }
+# 
+# plot(distances~positions)
+# https://rdrr.io/cran/ICSNP/man/spatial.median.html
+# cov.matrix <- matrix(c(3,2,1,2,4,-0.5,1,-0.5,2), ncol=3)
+# X <- rmvnorm(100, c(0,0,0), cov.matrix)
+# spatial.median(X)
+# 
+# plot(X)
+# points(spatial.median(X), col = 'red')
