@@ -42,15 +42,16 @@ ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
 
+
 ## ---------------------------
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <- c('2007', '2008', '2009')#c('2018', '2019') 
+years <-c('2015', '2016', '2017','2018', '2019', '2020') # c('2005','2006','2007', '2008', '2009')
+
+reference_date <- as.Date("2016-06-01")
+
 aoi <- c('Suriname') # 'Suriname', 'Braamspunt', 'WegNaarZee'
-
-
-# transect  <- readOGR(paste0(dataFolder, '/transects'), '2009_WnZ_transect')
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.names = T))
@@ -99,6 +100,8 @@ geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
 # keep_columns <- c('axisDist', 'mudFract', 'endDrop')  # necessary for mudbank output
 coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', c('coastDist'))
+# get transects
+transects <- reshape_csvLines(allFiles)
 
 visParams = list(
     bands = c("B5", "B4", "B3"),
@@ -114,10 +117,6 @@ visParams = list(
 #' 
 #-------
 
-# # get all transects on the same date 
-reference_date <- as.Date("2008-06-03")
-
-
 # collection 
 collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
@@ -128,32 +127,30 @@ collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
 collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
 
-collection <- collectionL8$merge(collectionL7)$merge(collectionL5)$
-  filter(ee$Filter$lt("CLOUD_COVER", 75))
+collection <- collectionL8$merge(collectionL5)$merge(collectionL7)$
+  filter(ee$Filter$lt("CLOUD_COVER", 90))
   
-
-
-filtCollect <- collection$filterDate(as.character(reference_date-120), as.character(reference_date+120))
 # ee_print(filtCollect)
+
+filtCollect <- collection$filterDate(as.character(reference_date-15), as.character(reference_date+30))
 dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
 image <- ee$Image(filtCollect$sort("CLOUD_COVER")$first())   #
+# properties <- ee_print(image)
 
-id <- eedate_to_rdate(image$get("system:time_start")) 
+id <- eedate_to_rdate(image$get("system:time_start"))
 
 first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
 Map$centerObject(filtCollect$first())
 
 # coastline Ponts
 coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == as.character(as.Date(id)) &
-                                coastlines$coastDist >= 0) 
+                                coastlines$coastDist >= 0)
 coastlines_selection[order(as.character(coastlines_selection$pos)),]
 
 # plot Map
-first  +mapview(coastlines_selection, col.regions = c("red"), layer.name = as.character(as.Date(id)))
-
-
-
+first  +mapview(coastlines_selection, col.regions = c("blue"), layer.name = as.character(as.Date(id))) +
+  mapview(transects)
 
 #---------------------------
 #'
@@ -162,7 +159,7 @@ first  +mapview(coastlines_selection, col.regions = c("red"), layer.name = as.ch
 #---------------------------
 
 # test simple 2d plot coastline dist
-pos_to_test <- c('32400')
+pos_to_test <- c('117000')
 
 # or on all entries 
 allFiles_gt0 <- subset(arrange(allFiles, pos, DATE_ACQUIRED), coastDist >=0) 
@@ -184,6 +181,15 @@ test_allFiles$outlier <- 1
 #'  Test for outliers on annual frequency for now
 #'  Improve: is annual frequency sufficient?
 #'  Is Rosner test applicable and correctly implemented
+subset_for_testPlot <- subset(test_allFiles, pos == pos_to_test)
+
+plot(as.Date(subset_for_testPlot$DATE_ACQUIRED), subset_for_testPlot$coastDist,
+     xlab="DATE_ACQUIRED", ylab="coastDist [m]",
+     main = paste0('coastline position: ',pos_to_test, ' [m]'))
+abline(v=as.Date(reference_date), lwd =2,lty=2, col = 'red')
+text(as.Date(reference_date)-20, quantile(subset_for_testPlot$coastDist, probs = c(0.12)), 
+     "reference date", col = "red", srt=90)
+
 
 for(i in group_dates){
   # i<-group_dates[group_dates == c("2017-01-01")]
@@ -195,7 +201,6 @@ for(i in group_dates){
     rownr <- strtoi(rownames(subset(test_allFiles, year_col == i & pos == q)))
     
     # detect outliers (give them a 0!!!)
-    
     test_allFiles[rownr, 'outlier'] <- rosner(subsets$coastDist)
     
   }
@@ -213,14 +218,14 @@ outliers <- subset(testSubset, outlier == 0)
 nonOutliers <- subset(testSubset, outlier == 1)
 
 # median values with steps per 3 months ()
-points(as.Date(nonOutliers$date_col), nonOutliers$mn, col = 'blue')
+# points(as.Date(nonOutliers$date_col), nonOutliers$mn, col = 'blue')
 
 # heatmap / space-time plot
 
 # # get for all transects an oldest coastline observation as baseline
 test_allFiles_mn$baseline <- 0 
 test_allFiles_mn$slope <- -1
-reference_date <- as.Date("2017-01-01")
+
 
 for (sid in allPos) {
   # sid = pos_to_test
