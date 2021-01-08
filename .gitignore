@@ -100,5 +100,7 @@ target/
 /data/temp
 /data/processed
 /data/raw
+/results/temp_maps
+/results
 
 .Rproj.user

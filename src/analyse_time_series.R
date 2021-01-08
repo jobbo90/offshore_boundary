@@ -81,10 +81,11 @@ allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(
 allPos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
 uniqueX<- unique(allFiles[, col_of_interest(allFiles, 'originX$')]);
 uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
-geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
+# geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
-keep_columns <- c('axisDist', 'dist_locf', 'distance')  # necessary for mudbank output
-# mudbanks <- reshape_csvPoints(allFiles, 'x', 'y', keep_columns)
+keep_columns <- c('axisDist', 'dist_locf', 'distance', 'outlier', 'mudFract',
+                  'originX', 'originY')  # necessary for mudbank output
+mudbanks <- reshape_csvPoints(allFiles, 'x', 'y', keep_columns)
 
 collectionL4 <- ee$ImageCollection("LANDSAT/LT04/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
@@ -117,7 +118,7 @@ visParams = list(
 #'      to ensure separate mudbanks are recognized
 #'      
 # all unique dates
-uniqueDates <- unique(allFiles[,col_dates]);
+uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 
 # # for testing: set to cloudfree
 # cloudFree <- ee$Image(collection$filter(ee$Filter$lt("CLOUD_COVER", 30))$
@@ -160,11 +161,11 @@ filtCollect <- collection$filterDate(as.character(as.Date(nearestDate)-1),
 dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
 first <- Map$addLayer(filtCollect$first(), visParams, paste0('landsat: ',nearestDate))
-Map$centerObject(filtCollect$first())
 
 
-first + mapview(coastlines_selection, col.regions = c("red"), 
-              layer.name = paste0('coastlines ',nearestDate)) +
+
+first + 
+  # mapview(coastlines_selection, col.regions = c("red"), layer.name = paste0('coastlines ',nearestDate)) +
   mapview(mudbanks_selection, col.regions = c("green"), layer.name = 'non outlier' ) +
   mapview(mudbank_selection_Outlier, col.regions = c("orange"), layer.name = 'outlier' )
   # mapview(mudbanks_selection2, col.regions = c("blue"), layer.name = '2009-11-15' )
@@ -173,60 +174,194 @@ plot(as.numeric(as.character(mudbanks_selection$pos)), mudbanks_selection$distan
 
 points(as.numeric(as.character(mudbank_selection_Outlier$pos)), mudbank_selection_Outlier$distance, col = 'red')
 
+# 
+# mudbanks_selection2 <-subset(mudbanks, 
+#                             as.Date(DATE_ACQUIRED) == c('2009-11-15') & 
+#                               axisDist >= 0 & 
+#                               distance >= 0 & 
+#                               outlier == 0) 
+# points(as.numeric(as.character(mudbanks_selection2$pos)), mudbanks_selection2$distance, col = 'blue')
+
+# or on all entries 
+allFiles_gt0 <- subset(arrange(mudbanks, pos, DATE_ACQUIRED), distance >=0) 
+
+# make groups of 3 months / 1 year per transect
+allFiles_gt0<-allFiles_gt0 %>%  
+  mutate(date_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 months"))) %>%
+  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "1 year"))) 
+
+all_years <- as.Date(as.POSIXlt(unique(allFiles_gt0$year_col)))
+all_quarters <- unique(allFiles_gt0$date_col)
+group_pos <- unique(allFiles_gt0$pos)
 
 
-mudbanks_selection2 <-subset(mudbanks, 
-                            as.Date(DATE_ACQUIRED) == c('2009-11-15') & 
-                              axisDist >= 0 & 
-                              distance >= 0 & 
-                              outlier == 0) 
-points(as.numeric(as.character(mudbanks_selection2$pos)), mudbanks_selection2$distance, col = 'blue')
+
+for(y in 1:length(all_years)){
+  y <- 1
+  year <- as.Date(all_years[y])
+  
+  # print(as.Date(all_years[y]))
+  
+  
+  for (p in 1:length(group_pos)){
+    # p = 113
+    position = group_pos[p]
+    # position = 165000
+    
+    subsets <- subset(allFiles_gt0, as.Date(as.POSIXlt(year_col)) == year &
+                      as.numeric(as.character(pos)) == 
+                        as.numeric(as.character(position)) &
+                        outlier == 0)
+    
+    plot(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$distance,
+         main = paste0('coastline position: ',position, ' [m]'))
+    abline(h=mean(subsets$distance), cex=2)
+    abline(h=median(subsets$distance), col = 'red', cex = 2, lty = 2)
+    abline(h=quantile(subsets$distance, probs = c(0.25)), col ='blue', cex =2, lty = 3)
+    abline(h=quantile(subsets$distance, probs = c(0.75)), col ='blue', cex =2, lty = 3)
+    
+    # allFiles_gt0$q75 <- quantile(subsets$distance, probs = c(0.75))
+    # allFiles_gt0$q25 <- quantile(subsets$distance, probs = c(0.25))
+    # 
+    
+    dist_of_interest <- mean(subsets$distance)
+
+    # should be 1 origin of the line.
+    originX <- unique(subsets$originX)
+    originY <- unique(subsets$originY)
+    
+    # take any one x and y coordinate (angle is allways the same)
+    endX <- subsets$x[1]
+    endY <- subsets$y[1]
+    
+    # transform to meters
+    # http://www.movable-type.co.uk/scripts/latlong.html?from=48.86,-122.0992&to=48.8599,-122.1449
+    # originPoint <- spTransform(SpatialPoints(data.frame(x = originX, y = originY),
+    #                                          CRS("+proj=longlat +datum=WGS84")),
+    #                            CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+    #                            
+    # originX_m <- coordinates(originPoint)[1,1]
+    # originY_m <- coordinates(originPoint)[1,2]
+    
+    # endPoint <- spTransform(SpatialPoints(data.frame(x = endX, y = endY),
+    #                                          CRS("+proj=longlat +datum=WGS84")),
+    #                            CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+    # 
+    # endPointX_m <- coordinates(endPoint)[1,1]
+    # endPointY_m <- coordinates(endPoint)[1,2]
+    # mapView(originPoint) + mapView(endPoint)
+    
+    # y1 - y0, x1 - x0
+    # theta <- atan2(lineCoords[1]-lineCoords[2], lineCoords[3]-lineCoords[4])   #?
+    # theta <- atan2(endPointY_m - originY_m, endPointY_m - originX_m)
+    # thetaT <-theta * 180 / pi # bearing in degrees #  theta+pi/2 
+    # 
+    
+    bearing <- bearing(SpatialPoints(data.frame(x = originX, y = originY),
+                  CRS("+proj=longlat +datum=WGS84")),
+                  SpatialPoints(data.frame(x = endX, y = endY),
+                                CRS("+proj=longlat +datum=WGS84"))
+                  )
+    
+    destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
+                            CRS("+proj=longlat +datum=WGS84")), bearing, dist_of_interest)
+    
+    spatialDest <- SpatialPoints(data.frame(x = destPoint[1], y = destPoint[2]), 
+                                 CRS("+proj=longlat +datum=WGS84"))
+     
+    # dx_poi <- dist_of_interest*cos(thetaT)
+    # dy_poi <- dist_of_interest*sin(thetaT)
+    # 
+    # # xnew = lineCoords[1] - dx_poi
+    # # ynew = lineCoords[3] - dy_poi
+    # 
+    # xnew = originX_m - dx_poi
+    # ynew = originY_m - dy_poi
+    # 
+    # # xnew = lineCoords[1] - dx_poi
+    # ynew = lineCoords[3] - dy_poi
+    distPoint <- spTransform(SpatialPoints(data.frame(x = xnew, y = ynew),
+                                          CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs"))),
+                                          CRS("+proj=longlat +datum=WGS84"))
+                            
+    mapView(originPoint) + mapView(endPoint) + mapView(spatialDest)
+    
+  }
+}
+
+
+image <- collection$filterDate(as.character(as.Date(year)-1), 
+                                     as.character(as.Date(year)+365))$
+                  sort("CLOUD_COVER")$first()
+
+
+# group_pos <- seq(95000, 120000,1000)
+# group_pos <- seq(190000, 240000,1000)
+# group_pos <- seq(280000, 340000,1000)
+subsets <- subset(allFiles_gt0, as.Date(as.POSIXlt(year_col)) == year &
+                    as.numeric(as.character(pos)) %in% 
+                    group_pos &
+                    outlier == 0)
+
+image_date<-eedate_to_rdate(image$get("system:time_start"))
+first <- Map$addLayer(image, visParams, paste0('landsat: ',image_date))
+
+Map$centerObject(image, 12)
+
+first + mapview(subsets)
+
+
+# for (x in 1:length(SpatialtestYearly@data$pos)){
+#   
+#   # x<-113
+#   alongshorePosition <- SpatialtestYearly@data$pos[x]
+#   
+#   transectObs = subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'pos')] == alongshorePosition)
+#   
+#   meanAxisDist = mean(transectObs$axisDist)
+#   
+#   # translate distances along transect
+#   # get corresponding transect (matching pos)
+#   selectedTransect <- sp_Lines_df[sp_Lines_df$pos == alongshorePosition, ]
+#   # mapview(st_as_sf(selectedTransect))
+#   
+#   # get coordinates at meanDistance away from origin
+#   # change to meters
+#   selectedTransect <- spTransform(selectedTransect, CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+#   lineCoords <- coordinates(selectedTransect)[[1]][[1]]
+#   
+#   # theta <- atan2(pos$ynext-pos$yprev, pos$xnext-pos$xprev)
+#   # # Angle between points on the line in radians (y1- y0, x1-x0)
+#   theta <- atan2(lineCoords[1]-lineCoords[2], lineCoords[3]-lineCoords[4])   #?
+#   thetaT <- theta+pi/2
+#   
+#   dx_poi <- meanAxisDist*cos(thetaT)      # coordinates of point of interest as defined by position length (sep)
+#   dy_poi <- meanAxisDist*sin(thetaT)
+#   
+#   xnew = lineCoords[1] - dx_poi
+#   ynew = lineCoords[3] - dy_poi
+#   
+#   newPoint <- spTransform(SpatialPoints(data.frame(x = xnew, y = ynew),CRS(as.character(selectedTransect@proj4string))),
+#                           CRS("+proj=longlat +datum=WGS84"))
+#   
+#   allAveragePoints <- rbind(allAveragePoints, data.frame(x=newPoint@coords[1], y = newPoint@coords[2],
+#                                                          pos = alongshorePosition,
+#                                                          meanAxisDist = meanAxisDist))
+#   
+# }
+
+
+# 
+# meaOffShore <- SpatialPointsDataFrame(data.frame(allAveragePoints[,'x'], allAveragePoints[,'y'] ), 
+#                                       data = data.frame(allAveragePoints[,'pos'], allAveragePoints[,'meanAxisDist']),
+#                                       proj4string=CRS("+proj=longlat +datum=WGS84"))
+# st_meaOffShore <- st_as_sf(meaOffShore)
+
 
 
 # filter points in river mouths:
 # 139000 - 147000 (suriname Rivier)
 # 242000 -252000  (saramacca rivier / coppename)
-
-
-# library(plotly)
-# library(grid)
-# ggplotly(p)
-#  
-# # downViewport('panel.3-4-3-4') 
-# pushViewport(dataViewport(x, y, c(0,10), c(0.1, 0.5))) 
-# pick<-grid.locator('in')
-# pick.n <- as.numeric(pick)
-# view.x <- as.numeric(convertX( unit(x,'native'), 'in' ))
-# view.y <- as.numeric(convertY( unit(y,'native'), 'in' ))
-# w <- which.min((view.x-pick.n[1])^2 + (view.y-pick.n[2])^2)
-# 
-# 
-# ggidentify <- function (x, y, labels, xscale=NULL, yscale=NULL) { 
-#   depth <- downViewport('ROOT')
-#   pushViewport(dataViewport(x,y, xscale, yscale))
-#   pick <- grid.locator('in')
-#   while(!is.null(pick)) {
-#     pick.n <- as.numeric(pick)
-#     view.x <- as.numeric(convertX( unit(x,'native'), 'in' ))
-#     view.y <- as.numeric(convertY( unit(y,'native'), 'in' ))
-#     d <- min( (view.x-pick.n[1])^2 + (view.y-pick.n[2])^2 )
-#     w <- which.min((view.x-pick.n[1])^2 + (view.y-pick.n[2])^2)
-#     if (d>0.1) {
-#       print("Closest point is too far")
-#     } else {  
-#       popViewport(n=1)
-#       upViewport(depth)
-#       print(last_plot() + annotate("text", label=labels[w], x = x[w], y = y[w], 
-#                                    size = 5, hjust=-0.5, vjust=-0.5))
-#       depth <- downViewport('panel.3-4-3-4')
-#       pushViewport(dataViewport(x,y, xscale, yscale))
-#     }
-#     pick <- grid.locator('in')
-#   }
-#   popViewport(n=1)
-#   upViewport(depth)
-# }
-# 
 
 
 
@@ -245,7 +380,6 @@ points(as.numeric(as.character(mudbanks_selection2$pos)), mudbanks_selection2$di
 # 
 # plot(x)
 # median.est = Gmedian(x)
-
 
 
 
@@ -295,65 +429,84 @@ points(as.numeric(as.character(mudbanks_selection2$pos)), mudbanks_selection2$di
 # 
 # 
 # 
-# gausslin.start <- function(x,y) {
-#   # https://stats.stackexchange.com/questions/62995/how-to-choose-initial-values-for-nonlinear-least-squares-fit
-#   # x <- positions
-#   # y <- distances
+# geom <- st_coordinates(ajoining_points)
+# test_spline<-smooth.spline(geom[,1] ~ geom[,2], spar=0.50)
+# 
+# SpatialPoints <- SpatialPointsDataFrame(data.frame(test_spline$y, test_spline$x ), 
+#                                         data = data.frame(DATE_ACQUIRED = ajoining_points$DATE_ACQUIRED,
+#                                                           mudFract = ajoining_points$mudFract),
+#                                         proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+# points_sf <- st_as_sf(SpatialPoints)
+# https://gis.stackexchange.com/questions/68359/creating-average-polygon
+
+
+# if dist < threshold (e.g. 0.01?) then keep
+# else check for index value, if sufficient: keep it 
+# http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+# http://www.geoinfo.info/proceedings_geoinfo2006.split/paper1.pdf
+# https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg 
+
+# test douglasPeuckerEpsilon
+# library(kmlShape)
+
+# plot(combined_ordered$x, combined_ordered$y)
+# functionD <- DouglasPeuckerEpsilon(trajx = combined_ordered$x,trajy = combined_ordered$y, epsilon = 0.0001, spar = NA)
+# testD <- DouglasPeuckerNbPoints( geom_ordered[range,1], trajy = geom_ordered[range,2], 2, spar=NA)
+# points( testD[,1], testD[,2],type="p", col = 'red')
+# points( functionD[,1], functionD[,2],type="p", col = 'red')
+
+
+# douglas pecker algorithm looks at the points that are furthest away from line, if large enough: included as vertext.
+# this assumes outliers are filtered sufficiently
+# e.g. first filter (e.g. by using a spline function (spar in Douglas function))
+# or manual filter that looks at a combination of distance on a line, and the fraction (within a range)
+
+# Alternatively; inverse of douglas filtering. 
+# Look at point, if it's distance is to far away exclude it
+# But that will only work if whe apply it on sub polylines that are on a imaginary line that corresponds to a boundary
+# http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
+
+#   findClosestPoint_manual <- function(trajx,trajy){
+# 
+#   trajx <- geom_ordered[range,1]
+#   trajy <- geom_ordered[range,2]
+# 
+#   dmax <- 1
+#   index <- 1
+#   end <- length(trajx)
 #   
-#   theilreg <- function(x,y){
-#     yy <- outer(y, y, "-")
-#     xx <- outer(x, x, "-")
-#     z  <- yy / xx
-#     slope     <- median(z[lower.tri(z)])
-#     intercept <- median(y - slope * x)
-#     cbind(intercept=intercept,slope=slope)
+#   if(end==2){
+#     index <- 1
+#     dmax <- 0
+#   }else{
+#     for(i in 2:(end-1)){ # for each point but the first and last
+#       i <- 2
+#       # calculate the distance
+#       d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
+#       if ( d < dmax ) {
+#         # update dmax & index with the distance
+#         # in the end only the max distance is included (due to the if(d>dmax))
+#         index <- i
+#         dmax <- d
+#       }else{} # don't do anything
+#     }
 #   }
 #   
+#   output <- c(index, dmax)
+#   names(output) <- c('index', 'dmax')
 #   
-#   # plot(x,y)
-#   tr <- theilreg(x,y)
-#   abline(tr,col=4)
-#   Ds = tr[2] # slope
-#   Es = tr[1] # intercept
-#   
-#   
-#   # yf = y-(Ds*x)-Es # Y = ax+b
-#   
-#   yf  <- y-Ds*x-Es 
-#   yfl <- loess(yf~x,span=.75)
-#   
-#   # assumes there are enough points that the maximum there is 'close enough' to 
-#   #  the true maximum
-#   
-#   yflf   <- yfl$fitted    
-#   # plot(x, yflf)
-#   locmax <- yflf==max(yflf)
-#   Bs     <- x[locmax]    # peak index
-#   As     <- yflf[locmax] # peak value
-#   
-#   qs     <- y>.6*As # yflf>.6*As
-#   ys     <- yfl$fitted[qs]
-#   xs     <- x[qs]-Bs
-#   lf     <- lm(ys~xs+I(xs^2))
-#   bets   <- lf$coefficients
-#   Bso    <- Bs
-#   Bs     <- Bso-bets[2]/bets[3]/2
-#   Cs     <- sqrt(-1/bets[3])
-#   ystart <- As*exp(-((x-Bs)/Cs)^2)+Ds*x+Es
-#   
-#   y1a <- y-As*exp(-((x-Bs)/Cs)^2)
-#   tr  <- theilreg(x,y1a)
-#   Ds  <- tr[2]
-#   Es  <- tr[1]
-#   res <- data.frame(As=As, Bs=Bs, Cs=Cs, Ds=Ds, Es=Es)
-#   res
+#   return(output)
+#   # return(c(index=index,dmax=dmax))
 # }
-# 
-# plot(distances~positions)
-# https://rdrr.io/cran/ICSNP/man/spatial.median.html
-# cov.matrix <- matrix(c(3,2,1,2,4,-0.5,1,-0.5,2), ncol=3)
-# X <- rmvnorm(100, c(0,0,0), cov.matrix)
-# spatial.median(X)
-# 
-# plot(X)
-# points(spatial.median(X), col = 'red')
+
+# nearestPoint <- findClosestPoint_manual(geom_ordered[range,1],geom_ordered[range,2])
+# points( geom_ordered[nearestPoint['index'],1], geom_ordered[nearestPoint['index'],2],type="p", col = 'green')
+# segments(trajx[1],trajy[1],  trajx[end], trajy[end])
+
+
+# farestPoint <- findFarestPoint_manual(geom_ordered[range,1], geom_ordered[range,2])
+
+# points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
+
+

@@ -342,97 +342,13 @@ for (i in uniqueDates){
 
 
   }
-  # redefine mudbank selection
-  mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
-                                mudbanks$axisDist >= 0 & 
-                                outlier == 0) 
-  mudbank_selection_Outlier <- subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
-                                        mudbanks$axisDist >= 0 &
-                                        outlier >= 1)
-
-  
-  
-  # geom <- st_coordinates(ajoining_points)
-  # test_spline<-smooth.spline(geom[,1] ~ geom[,2], spar=0.50)
-  # 
-  # SpatialPoints <- SpatialPointsDataFrame(data.frame(test_spline$y, test_spline$x ), 
-  #                                         data = data.frame(DATE_ACQUIRED = ajoining_points$DATE_ACQUIRED,
-  #                                                           mudFract = ajoining_points$mudFract),
-  #                                         proj4string=CRS("+proj=longlat +datum=WGS84"))
-  
-  # points_sf <- st_as_sf(SpatialPoints)
-    # https://gis.stackexchange.com/questions/68359/creating-average-polygon
-  
-  
-  # if dist < threshold (e.g. 0.01?) then keep
-  # else check for index value, if sufficient: keep it 
-  # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
-  # http://www.geoinfo.info/proceedings_geoinfo2006.split/paper1.pdf
-  # https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg 
-  
-  # test douglasPeuckerEpsilon
-  # library(kmlShape)
-  
-  # plot(combined_ordered$x, combined_ordered$y)
-  # functionD <- DouglasPeuckerEpsilon(trajx = combined_ordered$x,trajy = combined_ordered$y, epsilon = 0.0001, spar = NA)
-  # testD <- DouglasPeuckerNbPoints( geom_ordered[range,1], trajy = geom_ordered[range,2], 2, spar=NA)
-  # points( testD[,1], testD[,2],type="p", col = 'red')
-  # points( functionD[,1], functionD[,2],type="p", col = 'red')
-  
-  
-  # douglas pecker algorithm looks at the points that are furthest away from line, if large enough: included as vertext.
-  # this assumes outliers are filtered sufficiently
-  # e.g. first filter (e.g. by using a spline function (spar in Douglas function))
-  # or manual filter that looks at a combination of distance on a line, and the fraction (within a range)
-  
-  # Alternatively; inverse of douglas filtering. 
-  # Look at point, if it's distance is to far away exclude it
-  # But that will only work if whe apply it on sub polylines that are on a imaginary line that corresponds to a boundary
-  # http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0104-65002004000100006
-  
-#   findClosestPoint_manual <- function(trajx,trajy){
-# 
-#   trajx <- geom_ordered[range,1]
-#   trajy <- geom_ordered[range,2]
-# 
-#   dmax <- 1
-#   index <- 1
-#   end <- length(trajx)
-#   
-#   if(end==2){
-#     index <- 1
-#     dmax <- 0
-#   }else{
-#     for(i in 2:(end-1)){ # for each point but the first and last
-#       i <- 2
-#       # calculate the distance
-#       d <- shortestDistanceToLines(Mx=trajx[i],My=trajy[i], Ax=trajx[1],Ay=trajy[1], Bx=trajx[end],By=trajy[end])
-#       if ( d < dmax ) {
-#         # update dmax & index with the distance
-#         # in the end only the max distance is included (due to the if(d>dmax))
-#         index <- i
-#         dmax <- d
-#       }else{} # don't do anything
-#     }
-#   }
-#   
-#   output <- c(index, dmax)
-#   names(output) <- c('index', 'dmax')
-#   
-#   return(output)
-#   # return(c(index=index,dmax=dmax))
-# }
-
-  # nearestPoint <- findClosestPoint_manual(geom_ordered[range,1],geom_ordered[range,2])
-  # points( geom_ordered[nearestPoint['index'],1], geom_ordered[nearestPoint['index'],2],type="p", col = 'green')
-  # segments(trajx[1],trajy[1],  trajx[end], trajy[end])
-  
-  
-  # farestPoint <- findFarestPoint_manual(geom_ordered[range,1], geom_ordered[range,2])
-  
-  # points(geom_ordered[farestPoint['index'],1], geom_ordered[farestPoint['index'],2],type="p", col = 'green')
-  
-    
+  # # redefine mudbank selection for plotting
+  # mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
+  #                               mudbanks$axisDist >= 0 & 
+  #                               outlier == 0) 
+  # mudbank_selection_Outlier <- subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
+  #                                       mudbanks$axisDist >= 0 &
+  #                                       outlier >= 1)
 
 }
 

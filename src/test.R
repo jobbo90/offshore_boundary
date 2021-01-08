@@ -159,9 +159,9 @@ df_coastDist <- df_coastDist[,order(names(df_coastDist))]
 plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), c(1:length(2:ncol(df_coastDist))))
 
 plot(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]), df_coastDist[1,1:ncol(df_coastDist)-1])
-clicked <- identify(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]),
-                    df_coastDist[1,1:ncol(df_coastDist)-1], 
-                    n=1, labels=colnames(df_coastDist)[1:ncol(df_coastDist)-1])
+# clicked <- identify(as.Date(colnames(df_coastDist)[1:ncol(df_coastDist)-1]),
+                    # df_coastDist[1,1:ncol(df_coastDist)-1], 
+                    # n=1, labels=colnames(df_coastDist)[1:ncol(df_coastDist)-1])
 
 
 offShorePoints <- vector('list', length(csv))
@@ -188,7 +188,7 @@ for (q in 1:length(uniqueDates)){
 offShorePoints <- subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'x')] != -1)
 
 # Example per time step
-date_to_test <- c('2019-09-16')
+date_to_test <- c('2005-01-12')
 testYearly <- subset(offShorePoints, offShorePoints[,col_of_interest(offShorePoints, 'DATE_ACQUIRED')] == date_to_test)
 
 testYearlyCoastline <- subset(allPoints, allPoints[,col_of_interest(allPoints, 'DATE_ACQUIRED')] == date_to_test)
