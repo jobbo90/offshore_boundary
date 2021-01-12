@@ -43,10 +43,12 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   #' @param patternY is the pattern describing column of Y-coordinate
   
   # csv <- allFiles
-  # patternX <- 'coastX'
-  # patternY <- 'coastY'
-  # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist')
-  # cols_to_keep <- c('coastDist')
+  
+  # patternX <- 'peakCoordX'
+  # patternY <- 'peakCoordY'
+  # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
+  #                   'originX', 'originY', '.geo')
+  # cols_to_keep <- keep_columns
   
   dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
   coastDist <- col_of_interest(csv, 'coastDist$')
@@ -67,46 +69,52 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   allPoints <- vector('list', length(csv))
   
   for (n in 1:length(uniqueX)){
-    #n<-1
+    # n<-1
     
     # Coordinates of transects
     coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
     all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
     
-    begin_coords <- data.frame(lon = as.numeric(all_digits[1]),
-                               lat = as.numeric(all_digits[2]))
+    begin_coords <- data.frame(lon = as.numeric(all_digits[1]), #x
+                               lat = as.numeric(all_digits[2])) #y
     
     end_coords <- data.frame(lon = as.numeric(all_digits[3]),
                              lat = as.numeric(all_digits[4]))  
-    x <- as.matrix(rbind(begin_coords, end_coords))
+    # x <- as.matrix(rbind(begin_coords, end_coords))
 
     # only return observations if patternX >= 0 and if coordinates
-    test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n] 
+    test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')] == uniqueX[n]
                             & csv[,col_of_interest(csv, paste( '^', patternX, sep = ''))] != -1 )
+
+    if(nrow(test1transect) > 0){ # some transect had no obs in any of the images
+      
     
-    subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$'),
-                                    col_of_interest(csv, 'pos$')))]
+    # subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$'),
+    #                                 col_of_interest(csv, 'pos$')))]
     
     # coordiates of points of interest (coastline, offshore boundary etc)
-    coords <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternX, sep = ''))]),
+    df_out <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternX, sep = ''))]),
                          y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))]),
-                         DATE_ACQUIRED = as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')]),
-                         pos = as.character(test1transect[,col_of_interest(csv, 'pos$')])
-                         # axisDist = as.numeric(test1transect[,col_of_interest(csv, 'axisDist$')]),
-                         # endDrop = as.numeric(test1transect[,col_of_interest(csv, 'endDrop$')]),
-                         # coastDist = as.numeric(test1transect[,col_of_interest(csv, 'coastDist$')])
-                         # mudFract = as.numeric(test1transect[,col_of_interest(csv, 'mudFract$')])
+                         DATE_ACQUIRED = as.Date(as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')])),
+                         pos = as.numeric(as.character(test1transect[,col_of_interest(csv, 'pos$')]))
                          )
     
     for (c in cols_to_keep){
-      # c<- cols_to_keep[1]
+      # c<- cols_to_keep[7]
       # print(c)
       vals = as.numeric(test1transect[,col_of_interest(csv, c)])
-      coords[,paste0(c)] <- vals
+      df_out[,paste0(c)] <- vals
     }
     
-    allPoints <- rbind(allPoints, coords)
+    # also store the transect coordinates
+    df_out$trans_x0 <- as.numeric(begin_coords$lon)
+    df_out$trans_y0 <- as.numeric(begin_coords$lat)
+    df_out$trans_x1 <- as.numeric(end_coords$lon)
+    df_out$trans_y1 <- as.numeric(end_coords$lat)
     
+    
+    allPoints <- rbind(allPoints, df_out)
+    }
   }
   
   
@@ -198,32 +206,57 @@ reshape_csvLines <- function(csv){
 # outlier detection: rosnerTest
 # remove outliers based on a interval of 1 -3 years?
 # alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
-rosner <- function(x){
+rosner <- function(x, minStd){
   # x <- testPos$coastDist
-  # x <- subsets$coastDist
+  # x <- subsets2$coastDist
+  # minStd <- 100
+  
+  # assume no outliers (assign value 1)
   output <- rep(1,length.out=length(x))
   
+  # only aply when there is 5 observations
   if(length(x) > 5){
-    # assume no outliers (assign value 1)
-    
     
     K <- length(x)-2
     if(K > 10){
       K <- 10
-    }
+    } 
     
-    skip_to_next <- FALSE
+  if(K > floor(length(x)/2)){
+    K <- floor(length(x)/2)
+  }
+    
+    # skip_to_next <- FALSE
     # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
-    tryCatch(output[rosnerTest(x, K, warn = F)[['all.stats']][['Obs.Num']][which(rosnerTest(x, K, warn = F)[['all.stats']][['Outlier']])]] <- 0,
-             
-             # test <- ,
-             
-             error = function(e) {skip_to_next <<- TRUE})
-    # test <- any(rosnerTest(x, K, warn = F)), skip_to_next <- TRUE})
     
-    if(skip_to_next) { output <- rep(1,length.out=length(x)) } 
+  test2 <- has_error(rosnerTest(x, K, warn = F), silent = !interactive())
+  # throws an error when no outliers are detected... (all values are equal)
+  
+  if(!test2){ # if no error:
+      rosnerOut <- rosnerTest(x, K, warn = F)[['all.stats']]
+      # outliers:
+      outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
+      
+      output[outliers[!is.na(outliers)]] <- 0
+      
+      
+    } 
     
-    
+  #   tryCatch(output[rosnerTest(x, K, warn = F)[['all.stats']][['Obs.Num']]
+  #                   [which(rosnerTest(x, K, warn = F)[['all.stats']][['Outlier']])]] <- 0,
+  #            
+  #            # test <- ,
+  #            
+  #            # include that sd.i < x amount of pixels is also not an outlier?
+  #            # rosnerTest(x, K, warn = F)[['all.stats']][['SD.i']]
+  #            
+  #            
+  #            error = function(e) {skip_to_next <<- TRUE})
+  #   # test <- any(rosnerTest(x, K, warn = F)), skip_to_next <- TRUE})
+  #   
+  #   if(skip_to_next) { output <- rep(1,length.out=length(x)) } 
+  #   
+  #   
   }
   
   return (output)

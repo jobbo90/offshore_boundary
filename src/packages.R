@@ -25,6 +25,7 @@ library(lubridate) # for year/month etc.
 library(zoo)      # for na.locf
 library(car)      # for outlierTest
 library(testit)   # for has_error
+library(geosphere) # for bearing
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)
