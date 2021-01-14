@@ -44,8 +44,8 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   
   # csv <- allFiles
   
-  # patternX <- 'peakCoordX'
-  # patternY <- 'peakCoordY'
+  # patternX <- 'x'
+  # patternY <- 'y'
   # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
   #                   'originX', 'originY', '.geo')
   # cols_to_keep <- keep_columns
@@ -139,6 +139,8 @@ reshape_csvLines <- function(csv){
   #' @title reshape CSV to points matrix
   #' @description Return column number matching name with string pattern
   #' @param file csv file
+  #' 
+  #' csv <- allFiles 
   
   dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
   coastDist <- col_of_interest(csv, 'coastDist$')
@@ -199,6 +201,102 @@ reshape_csvLines <- function(csv){
     }
   }
   lines_sf <- SpatialLinesDataFrame(SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84")), data.frame(df_coastDist))
+  
+  return(lines_sf)
+}
+
+
+build_csvLines <- function(csv){
+  #' @title reshape CSV to points matrix
+  #' @description Return column number matching name with string pattern
+  #' @param file csv file
+  #' 
+  # csv <- allFiles
+  
+  dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
+  coastDist <- col_of_interest(csv, 'coastDist$')
+  
+  # all unique dates
+  uniqueDates <- unique(csv[,dates]);
+  
+  # all unique transect (id's)
+  pos <- unique(csv[, col_of_interest(csv, 'pos$')]);
+  uniqueX<- unique(csv[, col_of_interest(csv, 'originX$')]);
+  uniqueY<- unique(csv[, col_of_interest(csv, 'originY$')]);
+  
+  # define output matrices
+  lines <- vector('list', length(uniqueX));
+  df_coastDist = data.frame(matrix(NA, length(uniqueX), length(uniqueDates)+1),
+                            stringsAsFactors=F) # Empty data frame for coastal distance
+  colnames(df_coastDist) <- c('pos', uniqueDates)
+  
+  for (n in 1:length(uniqueX)){
+    # n<-3
+    
+    # Coordinates of transects
+    # coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
+    # all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
+    
+    # only return observations if coastDist >= 0 and if coordinates
+    test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n]
+                            & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
+    
+    subsets <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), 
+                                     col_of_interest(csv, 'DATE_ACQUIRED$'),
+                                     col_of_interest(csv, 'pos$')))]
+    
+
+    
+    
+
+    
+    # construct a data frame that matches the lines
+    if(nrow(subsets) == 0){
+      df_coastDist[n,] <- c(as.numeric(pos[n]), rep(NA, length(uniqueDates)))
+      
+      # THIS THROWS ERROR LATER ON WHEN THERE IS NOTHING IN SUBSET ALSO 
+      # NO POS IS ASSIGNED TO THE TRANSECT DATABASE!
+      
+      begin_coords <- data.frame(lon = -1,
+                                 lat = -1)
+      
+      end_coords <- data.frame(lon = -1,
+                               lat = -1)  
+      x <- as.matrix(rbind(begin_coords, end_coords))
+      
+    } else {
+      
+      
+      begin_coords <- data.frame(lon = as.numeric(test1transect$trans_x0[1]),
+                                 lat = as.numeric(test1transect$trans_y0[1]))
+      
+      end_coords <- data.frame(lon = as.numeric(test1transect$trans_x1[1]),
+                               lat = as.numeric(test1transect$trans_y1[1]))  
+      x <- as.matrix(rbind(begin_coords, end_coords))
+      
+      # at the correct location in df_coastDist append the coastline distance 
+      mathcingDates <- match(subsets[ ,col_of_interest(subsets, 'DATE_ACQUIRED')], 
+                             colnames(df_coastDist))
+      
+      # append the pos number of the transect to the first column
+      df_coastDist[n,col_of_interest(df_coastDist, 'pos$')] <-  
+        as.numeric(subsets[,col_of_interest(subsets, 'pos$')])[1]
+      
+      # fill for each date column the retrieved value
+      df_coastDist[n,mathcingDates[!is.na(c(mathcingDates))]] <- 
+        subsets[,col_of_interest(subsets, 'coastDist$')]
+      
+    }
+    
+    lines[[n]] <- Lines(list(Line(x)), ID = n)  # create line feature
+    
+  }
+  lines_sf <- SpatialLinesDataFrame(SpatialLines(lines,
+                                                 proj4string=
+                                                   CRS("+proj=longlat +datum=WGS84")),
+                                    data.frame(df_coastDist))
+
+  # lines_sf <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
   
   return(lines_sf)
 }
@@ -343,4 +441,26 @@ DouglasPeuckerEpsilon <- function(trajx,trajy,epsilon,spar=NA){
 
 
 
+
+to_spatial_df <-  function(matrix,x_to_use,y_to_use){
+  
+  # x_to_use <- 'coastX'
+  # y_to_use <- 'coastY'
+  # matrix <-  subset(subset_for_testPlot, coast_outlier == 1)
+  
+  if(nrow(matrix)>0){
+    df <- data.frame(matrix[[paste0(x_to_use)]], matrix[[paste0(y_to_use)]])
+    
+    sdf<- SpatialPointsDataFrame(df, proj4string=CRS("+proj=longlat +datum=WGS84"),
+                                 data = data.frame(matrix))
+  } else {
+    # return empty df
+    sdf<-SpatialPointsDataFrame(data.frame(x = 1, y = 1), data = 
+                                  data.frame(1))
+    
+  }
+  
+  return(sdf)
+  
+}
 
