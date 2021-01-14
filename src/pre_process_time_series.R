@@ -89,9 +89,10 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 uniqueDates <- unique(allFiles[,col_dates]);
 
-# coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', c('coastDist'))
 keep_columns <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
                   'originX', 'originY', 'coastX', 'coastY')
+# keep_columns <- colnames(allFiles)
+
 mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY', keep_columns)
 
 # change to NA
@@ -101,7 +102,8 @@ mudbanks$coastDist[mudbanks$coastDist == -1] <- NA
 mudbanks<-mudbanks[with(mudbanks, order(pos, DATE_ACQUIRED)), ]
 
 # make groups of 3 months per transect
-mudbanks <- mudbanks %>%  
+mudbanks <- mudbanks %>%
+  mutate(quarterly_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "3 month"))) %>%
   mutate(date_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "3 year"))) %>%
   mutate(year_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "1 year"))) 
 
@@ -124,27 +126,41 @@ for(i in group_years){
   # i<-group_dates[group_dates == c("2008-01-01")]
   
   for(q in group_pos){
-    # pos_to_test <- 	193000
+    # pos_to_test <- 	250000
     # q <- group_pos[group_pos == pos_to_test]
     # print(q)
-    subsets2 <- subset(mudbanks,  pos == q & 
-                         coastDist > -1) # test if NA cause trouble for Rosner function
+    # subsets2 <- subset(mudbanks,  pos == q & 
+    #                      date_col == i &
+    #                      coastDist > -1) # test if NA cause trouble for Rosner function
+    # 
+    indexs <- which(mudbanks$date_col == i & 
+                      mudbanks$pos == q &
+                      mudbanks$coastDist > -1)
     
-    rownr <- strtoi(rownames(subsets2))
+    subsets3 <- mudbanks[indexs, ]
+    # rownr <- as.character(indexs)
+    
+    #somehow row numbers are altered
+    mudbanks[indexs, 'coast_outlier'] <- 
+      rosner(subsets3$coastDist, min_Std)
+    
+    # test<-as.data.frame(mudbanks[row.names(mudbanks) %in% indexs, 'mudbank_outlier'])[,1]
     
     # testCoastline <-st_as_sf(SpatialPointsDataFrame(
     #   data.frame(subsets2$coastX, subsets2$coastY),
     #   proj4string=CRS("+proj=longlat +datum=WGS84"),
     #   data = data.frame(subsets2$pos)))
 
-    mapview(testCoastline, col.region = c('green')) + mapview(subsets2)
+    # mapview(testCoastline, col.region = c('green')) + mapview(subsets2)
     # detect outliers (give them a 0!!!)
-    mudbanks[rownr, 'coast_outlier'] <- rosner(subsets2$coastDist, min_Std)
-    
-    plot(as.Date(subsets2$DATE_ACQUIRED), subsets2$coastDist,
-         main = paste0(q), xlab = 'date', ylab = 'coastline position')
 
     
+    # plot(as.Date(subsets3$DATE_ACQUIRED), subsets3$coastDist,
+    #     main = paste0(q), xlab = 'date', ylab = 'coastline position')
+    # points(as.Date(subsets3$DATE_ACQUIRED)[which(rosner(subsets3$coastDist, min_Std) == 0)],
+    #        subsets3$coastDist[which(rosner(subsets3$coastDist, min_Std) == 0)],
+    #        col = 'red')
+
   }
 }
 
@@ -183,21 +199,43 @@ for(ind in indices){
 
 }
 
-# median observation per year 
-# not usefull yet becuse the median value is calculated with outliers included
-# so for now use locf value
-mudbanks <- mudbanks %>% group_by(pos, year_col, coast_outlier) %>%
-  mutate(coast_median = median(locf)) 
 
-# normalize mudbank Distance:
-# measured mudbank boundary - coastline distance (locf)
-mudbanks$mudbank_distance <- mudbanks$axisDist - mudbanks$locf   
+mudbanks<-mudbanks[order(mudbanks$pos),]
+
+# median observation per year 
+# re-calculate median value per year, per transect position
+mudbanks <- mudbanks %>% dplyr::group_by(pos, year_col, coast_outlier) %>%
+  dplyr::mutate(coast_median = median(coastDist, na.rm = T))
+
+# set outlier median dist to NA
+# this median is used to normalize all mudbank distances
+mudbanks$coast_median[mudbanks$coast_outlier == 0] <- NA
+
+# fill outliers with nearest median coastal observation
+# not ideal because some observations (start of year/end of year)
+# recieve median value from previous year...
+mudbanks <- mudbanks %>% group_by(pos, year_col) %>% mutate(coast_median = na.locf(na.locf(coast_median, na.rm=FALSE,
+                                                                                           fromLast = T)))
+
+mudbanks$mudbank_distance <- mudbanks$axisDist - mudbanks$coast_median  
 
 # some examples
 mudbanks_select <-subset(mudbanks, mudbanks$DATE_ACQUIRED == uniqueDates[2] & 
                               mudbanks$axisDist >= 0 & 
                               mudbanks$mudbank_distance >= 0) 
 
+# test simple 2d plot 
+twoD_pos <- 100000#190000
+subset2d_for_testPlot <- subset(mudbanks, pos == twoD_pos)
+
+plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
+     xlab="DATE_ACQUIRED", ylab="coastDist [m]",
+     main = paste0('coastline position: ',twoD_pos, ' [m]'))
+points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
+       subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
+       col = 'red')
+lines(as.Date(subset2d_for_testPlot$DATE_ACQUIRED),  subset2d_for_testPlot$coast_median,
+       col = 'blue')
 # plot(mudbanks_select$pos, mudbanks_select$locf)
 # points(mudbanks_select$pos, mudbanks_select$locf, col = 'red')
 # 
@@ -392,21 +430,20 @@ for (i in uniqueDates){
     
   }
   # redefine mudbank selection for plotting
-  mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i &
-                                mudbanks$axisDist >= 0 &
-                                mudbank_outlier == 0)
-  mudbank_selection_Outlier <- subset(mudbanks, mudbanks$DATE_ACQUIRED == i &
-                                        mudbanks$axisDist >= 0 &
-                                        mudbank_outlier >= 1)
-
-  testCoastline <-st_as_sf(SpatialPointsDataFrame(data.frame(mudbanks_selection$coastX, mudbanks_selection$coastY),
-                                proj4string=CRS("+proj=longlat +datum=WGS84"),
-                                data = data.frame(mudbanks_selection$pos)
-                                ))
-
-  mapview(mudbanks_selection, col.regions = c("blue"), layer.name = c('non outlier')) +
-  mapview(mudbank_selection_Outlier, col.regions = c("red"), layer.name = c('outlier')) +
-    mapview(testCoastline, col.regions = c('green'))
+  # mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i &
+  #                               mudbanks$axisDist >= 0 )
+  # mudbank_selection_Outlier <- subset(mudbanks, mudbanks$DATE_ACQUIRED == i &
+  #                                       mudbanks$axisDist >= 0 &
+  #                                       mudbank_outlier >= 1)
+  # 
+  # testCoastline <-st_as_sf(SpatialPointsDataFrame(data.frame(mudbanks_selection$coastX, mudbanks_selection$coastY),
+  #                               proj4string=CRS("+proj=longlat +datum=WGS84"),
+  #                               data = data.frame(mudbanks_selection$pos)
+  #                               ))
+  # 
+  # mapview(mudbanks_selection, col.regions = c("blue"), layer.name = c('non outlier')) +
+  # mapview(mudbank_selection_Outlier, col.regions = c("red"), layer.name = c('outlier')) +
+  #   mapview(testCoastline, col.regions = c('green'))
 
 
 }
