@@ -73,9 +73,20 @@ for (q in seq_along(years)) {
                          ))
 }
 filtered <- unique(filtered)
-allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
+allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
-                                                                                )))
+                                                                                ))))
+
+# somehow all the dates lost 1 hour (due to timezone def?)
+allFiles$year_col <- as.POSIXct(paste(as.POSIXct(allFiles$year_col), "23:00:00")) + 60*60
+allFiles$date_col <- as.POSIXct(paste(as.POSIXct(allFiles$date_col), "23:00:00")) + 60*60
+
+
+# x <- as.matrix(filtered)[2,1]
+# testRead <- read.csv(x, stringsAsFactors = FALSE,
+#          sep = ',', na.strings=c("","NA"))
+# 
+# unique_all <- unique(allFiles)
 
 # all unique transect (id's)
 allPos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
@@ -83,9 +94,13 @@ uniqueX<- unique(allFiles[, col_of_interest(allFiles, 'originX$')]);
 uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 # geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 
-keep_columns <- c('axisDist', 'dist_locf', 'distance', 'outlier', 'mudFract',
-                  'originX', 'originY')  # necessary for mudbank output
-mudbanks <- reshape_csvPoints(allFiles, 'x', 'y', keep_columns)
+keep_columns <- colnames(allFiles)#c('axisDist', 'dist_locf', 'distance', 'outlier', 'mudFract',
+                 # 'originX', 'originY')  # necessary for mudbank output
+# mudbanks <- reshape_csvPoints(allFiles, 'x', 'y', keep_columns)
+mudbanks <- st_as_sf(SpatialPointsDataFrame(data.frame(
+  allFiles$x, allFiles$y),
+  proj4string=CRS("+proj=longlat +datum=WGS84"),
+  data = data.frame(allFiles)))
 
 collectionL4 <- ee$ImageCollection("LANDSAT/LT04/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
@@ -140,20 +155,17 @@ uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 
 
 # plot one example
-reference_date <- as.Date("2005-06-15")
+reference_date <- as.Date("2009-11-15")
 nearestDate <- uniqueDates[1:length(uniqueDates) == 
                              which.min(abs(as.Date(uniqueDates) - reference_date))]
 
 mudbanks_selection <-subset(mudbanks, 
-                            as.Date(mudbanks$DATE_ACQUIRED) == nearestDate & 
-                              axisDist >= 0 & 
-                              distance >= 0 & 
-                              outlier == 0) 
+                            as.Date(mudbanks$DATE_ACQUIRED) == nearestDate) 
 
-mudbank_selection_Outlier <- subset(mudbanks[order(as.numeric(as.character(mudbanks$pos))),], 
-                                    as.Date(DATE_ACQUIRED) == nearestDate & 
-                                      mudbanks$axisDist >= 0 &
-                                      outlier >= 1)
+mudbank_selection_Outlier <- subset(mudbanks, 
+                                    as.Date(DATE_ACQUIRED) == nearestDate &
+                                    (mudbanks$mudbank_outlier >= 1 |
+                                    mudbanks$mudbank_distance < 0))
 
 # collection for testing
 filtCollect <- collection$filterDate(as.character(as.Date(nearestDate)-1), 
@@ -170,124 +182,132 @@ first +
   mapview(mudbank_selection_Outlier, col.regions = c("orange"), layer.name = 'outlier' )
   # mapview(mudbanks_selection2, col.regions = c("blue"), layer.name = '2009-11-15' )
 
-plot(as.numeric(as.character(mudbanks_selection$pos)), mudbanks_selection$distance)
+plot(as.numeric(as.character(mudbanks_selection$pos)), 
+     mudbanks_selection$mudbank_distance)
+points(as.numeric(as.character(mudbank_selection_Outlier$pos)),
+       mudbank_selection_Outlier$mudbank_distance, col = 'red')
 
-points(as.numeric(as.character(mudbank_selection_Outlier$pos)), mudbank_selection_Outlier$distance, col = 'red')
+
+all_years <- as.Date(as.POSIXlt(unique(allFiles$year_col)))
+
 
 # 
-# mudbanks_selection2 <-subset(mudbanks, 
-#                             as.Date(DATE_ACQUIRED) == c('2009-11-15') & 
-#                               axisDist >= 0 & 
-#                               distance >= 0 & 
-#                               outlier == 0) 
-# points(as.numeric(as.character(mudbanks_selection2$pos)), mudbanks_selection2$distance, col = 'blue')
-
-# or on all entries 
-allFiles_gt0 <- subset(arrange(mudbanks, pos, DATE_ACQUIRED), distance >=0) 
-
-# make groups of 3 months / 1 year per transect
-allFiles_gt0<-allFiles_gt0 %>%  
-  mutate(date_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "3 months"))) %>%
-  mutate(year_col = as.POSIXct(cut(lubridate::date(allFiles_gt0$DATE_ACQUIRED), "1 year"))) 
-
-all_years <- as.Date(as.POSIXlt(unique(allFiles_gt0$year_col)))
-all_quarters <- unique(allFiles_gt0$date_col)
-group_pos <- unique(allFiles_gt0$pos)
-
-
-
 for(y in 1:length(all_years)){
-  y <- 1
+  # y <- 5
   year <- as.Date(all_years[y])
-  
-  # print(as.Date(all_years[y]))
-  
-  
+
   for (p in 1:length(group_pos)){
     # p = 113
-    position = group_pos[p]
-    # position = 165000
+    # position = group_pos[p]
+    position = 200000
     
-    subsets <- subset(allFiles_gt0, as.Date(as.POSIXlt(year_col)) == year &
-                      as.numeric(as.character(pos)) == 
-                        as.numeric(as.character(position)) &
-                        outlier == 0)
+    subsets <- subset(allFiles, year_col == year &
+                      pos == position &
+                        mudbank_distance > 0 &
+                        mudbank_outlier == 0) # no outlier
     
-    plot(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$distance,
-         main = paste0('coastline position: ',position, ' [m]'))
-    abline(h=mean(subsets$distance), cex=2)
-    abline(h=median(subsets$distance), col = 'red', cex = 2, lty = 2)
-    abline(h=quantile(subsets$distance, probs = c(0.25)), col ='blue', cex =2, lty = 3)
-    abline(h=quantile(subsets$distance, probs = c(0.75)), col ='blue', cex =2, lty = 3)
+    plot(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$axisDist,
+         main = paste0('coastline position: ',position, ' [m]'), 
+         ylim = c(min(c(subsets$axisDist, subsets$coastDist), na.rm = T),
+              max(c(subsets$axisDist, subsets$coastDist), na.rm = T)),
+         xlab = paste0(format(as.Date(year), "%Y")),
+         ylab = 'distance from transect origin')
+    points(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$coastDist,col = 'red')
     
-    # allFiles_gt0$q75 <- quantile(subsets$distance, probs = c(0.75))
-    # allFiles_gt0$q25 <- quantile(subsets$distance, probs = c(0.25))
-    # 
     
-    dist_of_interest <- mean(subsets$distance)
+    
+    # abline(h=mean(subsets$coastDist, na.rm = T), cex=2)
+    # abline(h=median(subsets$coastDist, na.rm = T), col = 'red', cex = 2, lty = 2)
+    # abline(h=quantile(subsets$coastDist, probs = c(0.25), na.rm= T), col ='blue', cex =2, lty = 3)
+    # abline(h=quantile(subsets$coastDist, probs = c(0.75), na.rm = T), col ='blue', cex =2, lty = 3)
 
-    # should be 1 origin of the line.
-    originX <- unique(subsets$originX)
-    originY <- unique(subsets$originY)
+    # allFiles$q75 <- quantile(subsets$coastDist, probs = c(0.75))
+    # allFiles$q25 <- quantile(subsets$coastDist, probs = c(0.25))
+
+
+    if (nrow(subsets) > 1){
+      dist_of_interest <- mean(subsets$coastDist)
+      
+      # should be 1 origin of the line.
+      originX <- unique(subsets$originX)
+      originY <- unique(subsets$originY)
+      
+      # take any one x and y coordinate (angle is allways the same)
+      endX <- subsets$x[1]
+      endY <- subsets$y[1]
+      
+      # transform to meters
+      # http://www.movable-type.co.uk/scripts/latlong.html?from=48.86,-122.0992&to=48.8599,-122.1449
+      originPoint <- spTransform(SpatialPoints(data.frame(x = originX, y = originY),
+                                               CRS("+proj=longlat +datum=WGS84")),
+                                 CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+      
+      # originX_m <- coordinates(originPoint)[1,1]
+      # originY_m <- coordinates(originPoint)[1,2]
+      
+      # endPoint <- spTransform(SpatialPoints(data.frame(x = endX, y = endY),
+      #                                          CRS("+proj=longlat +datum=WGS84")),
+      #                            CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
+      # 
+      # endPointX_m <- coordinates(endPoint)[1,1]
+      # endPointY_m <- coordinates(endPoint)[1,2]
+      # mapView(originPoint) + mapView(endPoint)
+      
+      # y1 - y0, x1 - x0
+      # theta <- atan2(lineCoords[1]-lineCoords[2], lineCoords[3]-lineCoords[4])   #?
+      # theta <- atan2(endPointY_m - originY_m, endPointY_m - originX_m)
+      # thetaT <-theta * 180 / pi # bearing in degrees #  theta+pi/2 
+      # 
+      
+      bearing <- bearing(SpatialPoints(data.frame(x = originX, y = originY),
+                                       CRS("+proj=longlat +datum=WGS84")),
+                         SpatialPoints(data.frame(x = endX, y = endY),
+                                       CRS("+proj=longlat +datum=WGS84"))
+      )
+      
+      # origin X needs to be corrected by coastline pos, just like
+      # mudbank locations
+      # set origin at correct location or add coastline dist to dist of interest?
+      destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
+                                           CRS("+proj=longlat +datum=WGS84")), bearing, dist_of_interest)
+      
+      # spatialDest <- SpatialPoints(data.frame(x = destPoint[1], y = destPoint[2]),
+                                   # CRS("+proj=longlat +datum=WGS84"))
+      
+      allFiles_gt0[which(row.names(allFiles_gt0) %in% row.names(subsets)), 'distX'] <-
+        destPoint[1]
+      
+      allFiles_gt0[which(row.names(allFiles_gt0) %in% row.names(subsets)), 'distY'] <-
+        destPoint[2]
+      
+      # dx_poi <- dist_of_interest*cos(thetaT)
+      # dy_poi <- dist_of_interest*sin(thetaT)
+      # 
+      # # xnew = lineCoords[1] - dx_poi
+      # # ynew = lineCoords[3] - dy_poi
+      # 
+      # xnew = originX_m - dx_poi
+      # ynew = originY_m - dy_poi
+      # 
+      # # xnew = lineCoords[1] - dx_poi
+      # ynew = lineCoords[3] - dy_poi
+      # distPoint <- spTransform(SpatialPoints(data.frame(x = xnew, y = ynew),
+      #                                       CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs"))),
+      #                                       CRS("+proj=longlat +datum=WGS84"))
+      
+      mapView(originPoint, col.regions = c("red")) + mapView(spatialDest) # + mapView(endPoint)
+      
+      
+    }
     
-    # take any one x and y coordinate (angle is allways the same)
-    endX <- subsets$x[1]
-    endY <- subsets$y[1]
-    
-    # transform to meters
-    # http://www.movable-type.co.uk/scripts/latlong.html?from=48.86,-122.0992&to=48.8599,-122.1449
-    # originPoint <- spTransform(SpatialPoints(data.frame(x = originX, y = originY),
-    #                                          CRS("+proj=longlat +datum=WGS84")),
-    #                            CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
-    #                            
-    # originX_m <- coordinates(originPoint)[1,1]
-    # originY_m <- coordinates(originPoint)[1,2]
-    
-    # endPoint <- spTransform(SpatialPoints(data.frame(x = endX, y = endY),
-    #                                          CRS("+proj=longlat +datum=WGS84")),
-    #                            CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
-    # 
-    # endPointX_m <- coordinates(endPoint)[1,1]
-    # endPointY_m <- coordinates(endPoint)[1,2]
-    # mapView(originPoint) + mapView(endPoint)
-    
-    # y1 - y0, x1 - x0
-    # theta <- atan2(lineCoords[1]-lineCoords[2], lineCoords[3]-lineCoords[4])   #?
-    # theta <- atan2(endPointY_m - originY_m, endPointY_m - originX_m)
-    # thetaT <-theta * 180 / pi # bearing in degrees #  theta+pi/2 
-    # 
-    
-    bearing <- bearing(SpatialPoints(data.frame(x = originX, y = originY),
-                  CRS("+proj=longlat +datum=WGS84")),
-                  SpatialPoints(data.frame(x = endX, y = endY),
-                                CRS("+proj=longlat +datum=WGS84"))
-                  )
-    
-    destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
-                            CRS("+proj=longlat +datum=WGS84")), bearing, dist_of_interest)
-    
-    spatialDest <- SpatialPoints(data.frame(x = destPoint[1], y = destPoint[2]), 
-                                 CRS("+proj=longlat +datum=WGS84"))
-     
-    # dx_poi <- dist_of_interest*cos(thetaT)
-    # dy_poi <- dist_of_interest*sin(thetaT)
-    # 
-    # # xnew = lineCoords[1] - dx_poi
-    # # ynew = lineCoords[3] - dy_poi
-    # 
-    # xnew = originX_m - dx_poi
-    # ynew = originY_m - dy_poi
-    # 
-    # # xnew = lineCoords[1] - dx_poi
-    # ynew = lineCoords[3] - dy_poi
-    distPoint <- spTransform(SpatialPoints(data.frame(x = xnew, y = ynew),
-                                          CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs"))),
-                                          CRS("+proj=longlat +datum=WGS84"))
-                            
-    mapView(originPoint) + mapView(endPoint) + mapView(spatialDest)
+   
     
   }
 }
+
+# filter points in river mouths:
+# 139000 - 147000 (suriname Rivier)
+# 242000 -252000  (saramacca rivier / coppename)
 
 
 image <- collection$filterDate(as.character(as.Date(year)-1), 
@@ -303,12 +323,18 @@ subsets <- subset(allFiles_gt0, as.Date(as.POSIXlt(year_col)) == year &
                     group_pos &
                     outlier == 0)
 
+meanPos <- SpatialPoints(data.frame(x = subsets$distX, y =  subsets$distY),
+                         CRS("+proj=longlat +datum=WGS84"))
+
+# spatialDest <- SpatialPoints(data.frame(x = destPoint[1], y = destPoint[2]), 
+#                              CRS("+proj=longlat +datum=WGS84"))
+
 image_date<-eedate_to_rdate(image$get("system:time_start"))
 first <- Map$addLayer(image, visParams, paste0('landsat: ',image_date))
 
 Map$centerObject(image, 12)
 
-first + mapview(subsets)
+first + mapview(subsets) + mapView(meanPos, col.regions = c("red"), layer.name = 'meanPos' )
 
 
 # for (x in 1:length(SpatialtestYearly@data$pos)){
@@ -359,9 +385,7 @@ first + mapview(subsets)
 
 
 
-# filter points in river mouths:
-# 139000 - 147000 (suriname Rivier)
-# 242000 -252000  (saramacca rivier / coppename)
+
 
 
 
