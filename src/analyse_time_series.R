@@ -174,6 +174,33 @@ dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
 first <- Map$addLayer(filtCollect$first(), visParams, paste0('landsat: ',nearestDate))
 
+# or on multiple entries 
+pos_to_test <- seq(from = 165000, to = 250000, by = 1000)
+years_to_test <- 2006
+subset_for_testPlot <- subset(allFiles_mutate, pos %in% pos_to_test &
+                                year == years_to_test)
+
+plot(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$mudbank_distance+
+                                         subset_for_testPlot$coast_median),
+     xlim= rev(range(rev(subset_for_testPlot$pos))),
+     xlab="alongshore position", ylab="along transect distance [m]",
+     main = paste0('position: ',min(pos_to_test),' - ', 
+                   max(pos_to_test), ' in ', years_to_test))
+
+points(rev(subset(subset_for_testPlot, mudbank_outlier == 1)$pos),
+       rev(subset(subset_for_testPlot, mudbank_outlier == 1)$mudbank_distance + 
+             + subset(subset_for_testPlot, mudbank_outlier == 1)$coast_median), 
+       col='red')
+points(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$coast_median),
+       col = 'blue')
+
+legend("topleft", 
+       legend = c("boundary", "outliers", 'median coastal position'),
+       col = c('black', 'red', 'blue'),
+       pt.cex = 2,pch = c(1,1))
+
+mudbankPos <- to_spatial_df( subset(subset_for_testPlot, mudbank_outlier == 0), 
+                             'x', 'y')
 
 
 first + 

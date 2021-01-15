@@ -46,7 +46,8 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <- c('2005', '2006','2007', '2008','2009') 
+years <-  seq(from = 2000, to = 2020, by = 1)
+  #c('2005', '2006','2007', '2008','2009') 
 
 min_Std <- 100 # minimal amount of meters difference before concidered outlier
 
@@ -55,14 +56,16 @@ folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.na
 df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
-
+aoi <-  c('Suriname') 
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
-      # q <- 1
-      year = years[q]
+  for (x in seq_along(aoi)){
+      # q <- 8
+      year = as.character(years[q])
+      region = aoi[x]
       
-      filters = c(year)
+      filters = c(year, region)
       
       filtered = rbind(filtered, df %>% 
                          dplyr::filter(
@@ -72,7 +75,7 @@ for (q in seq_along(years)) {
                              purrr::map(~ to_keep(.x, text = text)) %>%
                              # get a logical vector of rows to keep
                              purrr::pmap_lgl(all)
-                         ))
+                         ))}
 }
 filtered <- unique(filtered)
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,

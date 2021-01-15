@@ -26,6 +26,8 @@ library(zoo)      # for na.locf
 library(car)      # for outlierTest
 library(testit)   # for has_error
 library(geosphere) # for bearing
+library(scales)   # for squish in ggplot
+
 # library(cowplot)
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)

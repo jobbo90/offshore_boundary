@@ -140,7 +140,7 @@ reshape_csvLines <- function(csv){
   #' @description Return column number matching name with string pattern
   #' @param file csv file
   #' 
-  #' csv <- allFiles 
+  # csv <- allFiles
   
   dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
   coastDist <- col_of_interest(csv, 'coastDist$')
@@ -241,9 +241,9 @@ build_csvLines <- function(csv){
     test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')]== uniqueX[n]
                             & csv[,col_of_interest(csv, 'coastDist$')] >= 0 )
     
-    subsets <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), 
+    subsets <- unique(test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), 
                                      col_of_interest(csv, 'DATE_ACQUIRED$'),
-                                     col_of_interest(csv, 'pos$')))]
+                                     col_of_interest(csv, 'pos$')))])
     
 
     
