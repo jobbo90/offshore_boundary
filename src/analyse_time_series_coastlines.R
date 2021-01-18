@@ -242,12 +242,16 @@ for (sid in allPos) {
     # pull(grp) # if needed as seperate vector?
 
   groups_of_obs <- unique(nonOutliersAll$grp)
+  
+  # probably move this to pre-processing
+  # also the slope is not a very visual signal yet. 
+  # It is a good indication of magnitude though
+  
+  # for every 5 observation:
   for (qdate in groups_of_obs){
-    
-    # print(as.Date(qdate))
-
     # qdate <- groups_of_obs[2]
-    # print(sid)
+    
+    # observation dates
     obs_dates <- as.Date(nonOutliersAll[nonOutliersAll$grp == qdate, ]$DATE_ACQUIRED)
     
     # indices inside original data.frame
@@ -277,19 +281,11 @@ for (sid in allPos) {
       lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
       intercept <-lm.out$coefficients[1]
       slope <- round(lm.out$coefficients[2], 5)
-      
-      #improve;
-      # calculate these stats per year.
-      # residuals
+
       # resid <- lm.out$residuals
       # maxResid <- which.max(abs(resid))
       estimated <- intercept + (as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))*slope)
-      
-      
-      #' 
-      #' plotting for trouble shooting
-      #' 
-      #' 
+
       # plot(as.Date(subsetPos$DATE_ACQUIRED), subsetPos$coastDist, ylim = c(min(subsetPos$coastDist)-30,max(subsetPos$coastDist)+ 30))
       # points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
       
@@ -321,7 +317,7 @@ allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$basel
 
 
 # test simple 2d plot 
-twoD_pos <- 156000
+twoD_pos <- 299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
 # filter outliers & negative coastal distances

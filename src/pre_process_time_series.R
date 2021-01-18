@@ -252,7 +252,7 @@ lines(as.Date(subset2d_for_testPlot$DATE_ACQUIRED),  subset2d_for_testPlot$coast
 
 # good example dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
 
-# set outlier to 1: assume nothing is an outlier
+# set outlier: assume nothing is an outlier
 mudbanks$mudbank_outlier <- 0
 
 
