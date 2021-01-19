@@ -106,9 +106,12 @@ mudbanks<-mudbanks[with(mudbanks, order(pos, DATE_ACQUIRED)), ]
 
 # make groups of 3 months per transect
 mudbanks <- mudbanks %>%
-  mutate(quarterly_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "3 month"))) %>%
-  mutate(date_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "3 year"))) %>%
-  mutate(year_col = as.POSIXct(cut(lubridate::date(mudbanks$DATE_ACQUIRED), "1 year"))) 
+  mutate(quarterly_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED),
+                                     "3 month"))) %>%
+  mutate(date_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED), 
+                                "3 year"))) %>%
+  mutate(year_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED),
+                                "1 year"))) 
 
 group_dates<-unique(mudbanks$year_col)
 group_pos <- unique(mudbanks$pos)
