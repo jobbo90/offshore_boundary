@@ -47,7 +47,7 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/processed'
-years <- seq(from = 2000, to = 2020, by = 1)
+years <- seq(from = 1985, to = 2020, by = 1)
   
   
   #c('2015', '2016', '2017','2018', '2019', '2020') # c('2005','2006','2007', '2008', '2009')

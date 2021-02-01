@@ -77,13 +77,13 @@ filtered <- unique(filtered)
 allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
                                                                                 ))))
+# testReada <- read.csv(as.matrix(filtered)[1,1],
+         # sep = ',', na.strings=c("","NA"))
 
 # somehow all the dates lost 1 hour (due to timezone def?)
-allFiles$year_col <- as.POSIXct(paste(as.POSIXct(allFiles$year_col), "23:00:00")) + 60*60
-allFiles$date_col <- as.POSIXct(paste(as.POSIXct(allFiles$date_col), "23:00:00")) + 60*60
-allFiles$quarterly_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$quarterly_col), "23:00:00")) + 360*60)
-
-
+# allFiles$year_col <- as.POSIXct(paste(as.POSIXct(allFiles$year_col), "23:00:00")) + 60*60
+# allFiles$date_col <- as.POSIXct(paste(as.POSIXct(allFiles$date_col), "23:00:00")) + 60*60
+# allFiles$quarterly_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$quarterly_col), "23:00:00")) + 360*60)
 
 allFiles <- allFiles %>% mutate(year = year(DATE_ACQUIRED),
                                            month = month(DATE_ACQUIRED, label=TRUE),
@@ -122,7 +122,7 @@ collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
 collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
 
-collection <- collectionL8$merge(collectionL7)$merge(collectionL5)$
+collection <- collectionL8$merge(collectionL5)$#merge(collectionL7)$
   merge(collectionL4)
 
 visParams = list(
@@ -225,17 +225,17 @@ points(as.numeric(as.character(mudbank_selection_Outlier$pos)),
 all_years <- as.Date(as.POSIXlt(unique(allFiles$year_col)))
 group_pos <- unique(allFiles$pos)
 
-# 
+# get median position for each year
 for(y in 1:length(all_years)){
-  # y <- 5
-  year <- all_years[y]
+  # y <- 4
+  selected_year <- year(all_years[y])
 
   for (p in 1:length(group_pos)){
-    # p = 113
+    # p = 230#113
     position = group_pos[p]
     # position = 202000
     
-    subsets <- subset(allFiles, year_col == all_years[y] &
+    subsets <- subset(allFiles, year == selected_year &
                       pos == position &
                         mudbank_distance > 0 &
                         mudbank_outlier == 0) # no outlier
@@ -253,7 +253,7 @@ for(y in 1:length(all_years)){
     #      main = paste0('mudbank position position: ',position, ' [m]'),
     #      ylim = c(min(c(subsets$axisDist, subsets$coastDist), na.rm = T),
     #           max(c(subsets$axisDist, subsets$coastDist), na.rm = T)),
-    #      xlab = paste0(format(as.Date(year), "%Y")),
+    #      xlab = paste0(format(as.Date(selected_year), "%Y")),
     #      ylab = 'distance from transect origin')
     # points(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$coastDist,col = 'red')
 
@@ -381,25 +381,44 @@ for(y in 1:length(all_years)){
 # filter points in river mouths:
 # 139000 - 147000 (suriname Rivier)
 # 242000 -252000  (saramacca rivier / coppename)
-image <- collection$filterDate(as.character(as.Date(year)-1), 
-                                     as.character(as.Date(year)+365))$
+image <- collection$filterDate(as.character(as.Date('2008-06-01')-14), 
+                                     as.character(as.Date('2008-06-01')+15))$
                   sort("CLOUD_COVER")$first()
 
 
 # group_pos <- seq(95000, 120000,1000)
 # group_pos <- seq(190000, 240000,1000)
 # group_pos <- seq(280000, 340000,1000)
-subsets <- subset(allFiles,  year_col == all_years[y] &
-                    as.numeric(as.character(pos)) %in% pos_to_test &
+subsets <- subset(allFiles,  year_col == all_years[1] &
+                    # as.numeric(as.character(pos)) %in% pos_to_test &
                     mudbank_outlier == 0)
+
+# subsets2 <- subset(allFiles,  year_col == all_years[7] &
+#                     # as.numeric(as.character(pos)) %in% pos_to_test &
+#                     mudbank_outlier == 0)
+# subsets3 <- subset(allFiles,  year_col == all_years[12] &
+#                      # as.numeric(as.character(pos)) %in% pos_to_test &
+#                      mudbank_outlier == 0)
 
 allObs <- SpatialPoints(data.frame(x = subsets$x, y = subsets$y),
                         CRS("+proj=longlat +datum=WGS84"))
 
 # remove NA
-meanPos <- SpatialPoints(data.frame(x = subsets$distX[complete.cases(subsets$distX)], 
+meanPos <- SpatialPoints(data.frame(x = subsets$distX[complete.cases(subsets$distX)],
                                     y =  subsets$distY[complete.cases(subsets$distY)]),
                          CRS("+proj=longlat +datum=WGS84"))
+# meanPos2 <- SpatialPoints(data.frame(x = subsets2$distX[complete.cases(subsets2$distX)],
+#                                     y =  subsets2$distY[complete.cases(subsets2$distY)]),
+#                          CRS("+proj=longlat +datum=WGS84"))
+# meanPos3 <- SpatialPoints(data.frame(x = subsets3$distX[complete.cases(subsets3$distX)],
+#                                      y =  subsets3$distY[complete.cases(subsets3$distY)]),
+#                           CRS("+proj=longlat +datum=WGS84"))
+# 
+# mapView(meanPos, col.regions = c("red"), layer.name = as.character(all_years[4])) +
+#   mapView(meanPos2, col.regions = c("green"), layer.name = as.character(all_years[7])) +
+#   mapView(meanPos3, col.regions = c("blue"), layer.name = as.character(all_years[10]))
+#   
+
 
 # or on combination data set( neighbouring transects)
 # combined <- rbind(subsets, ajoining_points)
@@ -440,75 +459,89 @@ first + mapView(allObs) +
 
 
 # test mudbank estimate on 1 image
-ref_date <- c('2009-09-12')
-subset_1_image <- subset(allFiles, DATE_ACQUIRED == as.Date(ref_date) &
-                     pos %in% pos_to_test &
-                    mudbank_distance > 0 &
-                    mudbank_outlier == 0)
-
-
-spatial_test<- SpatialPoints(data.frame(x = subset_1_image$x, y = subset_1_image$y),
-              CRS("+proj=longlat +datum=WGS84"))
-
-test_image <- collection$filterDate(as.character(as.Date(ref_date)-1), 
-                      as.character(as.Date(ref_date)+1))$
-  sort("CLOUD_COVER")$first()
-first <- Map$addLayer(test_image, visParams, paste0('landsat: ',image_date))
-first + mapView(spatial_test)
+# ref_date <- c('2009-09-12')
+# subset_1_image <- subset(allFiles, DATE_ACQUIRED == as.Date(ref_date) &
+#                      pos %in% pos_to_test &
+#                     mudbank_distance > 0 &
+#                     mudbank_outlier == 0)
+# 
+# 
+# spatial_test<- SpatialPoints(data.frame(x = subset_1_image$x, y = subset_1_image$y),
+#               CRS("+proj=longlat +datum=WGS84"))
+# 
+# test_image <- collection$filterDate(as.character(as.Date(ref_date)-1), 
+#                       as.character(as.Date(ref_date)+1))$
+#   sort("CLOUD_COVER")$first()
+# first <- Map$addLayer(test_image, visParams, paste0('landsat: ',image_date))
+# first + mapView(spatial_test)
 
 
 mas_folder <- 'D:/BackUp_D_mangroMud_202001/Research/External_Data/Spatial/Kustmetingen_MAS/surveys'
-folderSelect <- as.matrix(list.files(paste0(mas_folder), full.names = T))
+# relevant files: 
+# 4-6-2002 (near Suriname river)
+# 31-12-2008 (entire coast of Suriname)
+
+mas_folder2 <- 'D:/BackUp_D_mangroMud_202001/Research/External_Data/Source/KustmetingMAS_source/shp'
+# relevant file: 2016_west 
+# to lesser extent 2014_oost
+
+folderSelect <- as.matrix(list.files(paste0(mas_folder2), full.names = T))
 df <- rewrite(folderSelect);
 df <- df[grep('.shp', folderSelect, ignore.case = T),]
 
-bathy <- shapefile(paste0(df[2,]))
-mapView(bathy, zcol = "z")
 
 
-yearsMas <- c('2005')
-filteredMas <- vector('list', 100)
-for (q in seq_along(yearsMas)) {
-  # q <- 1
-  year = yearsMas[q]
-  
-  filters = c(year)
-  
-  filteredMas = rbind(filteredMas, df %>% 
-                     dplyr::filter(
-                       filters %>%
-                         # apply the filter of all the text rows for each pattern
-                         # you'll get one list of logical by pattern ignored_string
-                         purrr::map(~ to_keep(.x, text = text)) %>%
-                         # get a logical vector of rows to keep
-                         purrr::pmap_lgl(all)
-                     ))
-}
-filteredMas <- unique(filteredMas)
-allMasPoints <- do.call(rbind, lapply(as.matrix(filteredMas)[,1], function(x) shapefile(x)))
+# yearsMas <- c('2008')
+# filteredMas <- vector('list', 100)
+# for (q in seq_along(yearsMas)) {
+#   # q <- 1
+#   year = yearsMas[q]
+#   
+#   filters = c(year)
+#   
+#   filteredMas = rbind(filteredMas, df %>% 
+#                      dplyr::filter(
+#                        filters %>%
+#                          # apply the filter of all the text rows for each pattern
+#                          # you'll get one list of logical by pattern ignored_string
+#                          purrr::map(~ to_keep(.x, text = text)) %>%
+#                          # get a logical vector of rows to keep
+#                          purrr::pmap_lgl(all)
+#                      ))
+# }
+# filteredMas <- unique(filteredMas)
+# allMasPoints <- do.call(rbind, lapply(as.matrix(filteredMas)[,1], function(x) shapefile(x)))
+
+# or a single file
+allMasPoints <- shapefile(paste0(df[2,]))
+first + mapView(allMasPoints, zcol = "z") + mapView(maxCount_spatial,
+                                                    col.regions = c("yellow")) +
+  mapView(meanPos, col.regions = c("red"), layer.name = 'meanPos' ) +
+  mapView(allObs)
 
 e <- extent(bbox(allMasPoints))
-e[4] <- 6.2
-e[1] <- -56
-e[2] <- -55
-p <- as(e, 'SpatialPolygons')  
+# e[4] <- 6.2
+# e[1] <- -56
+# e[2] <- -55
+# p <- as(e, 'SpatialPolygons')  
 
-crs(p) <- crs(allMasPoints)
-mapView(p) + mapView(overPoints)
+# crs(p) <- crs(allMasPoints)
+# mapView(p) + mapView(overPoints)
 
-overPoints <- over(allMasPoints,p )
-overPoints <- point.in.poly(allMasPoints, p)
+# overPoints <- over(allMasPoints,p )
+# overPoints <- point.in.poly(allMasPoints, p)
 
 
 # library(geosphere)
 library(rgeos)
-library(spatialEco)
+# library(spatialEco)
 library(sp)
 
 # get nearest observation for 2005
 dist_with_markers <- gDistance(maxCount_spatial[50],allMasPoints, byid=T)
 nearest <- apply(dist_with_markers,2, which.min)
 nearest_dist <- apply(dist_with_markers, 2, min) 
+
 
 mapView(allMasPoints[nearest,])+mapView(maxCount_spatial[50])
 

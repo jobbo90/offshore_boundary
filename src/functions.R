@@ -307,6 +307,8 @@ build_csvLines <- function(csv){
 rosner <- function(x, minStd){
   # x <- testPos$coastDist
   # x <- subsets2$coastDist
+  # x <- combined$axisDist
+  
   # minStd <- 100
   
   # assume no outliers (assign value 1)
