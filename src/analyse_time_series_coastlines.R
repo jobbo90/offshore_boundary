@@ -38,6 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
+Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -48,7 +49,11 @@ source("./src/functions.R")
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/processed'
 years <- seq(from = 1985, to = 2020, by = 1)
-  
+
+# near river mouths estimates for coastlines in old version of GEE script are 
+# questionable, should partially be solved in newest versions (11-2-2021)
+posToExclude <- c(seq(138000,147000,1000),
+                  seq(241000, 255000, 1000))  
   
   #c('2015', '2016', '2017','2018', '2019', '2020') # c('2005','2006','2007', '2008', '2009')
 
@@ -89,12 +94,6 @@ for (q in seq_along(years)) {
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
                                                                                 )))
-
-
-# somehow all the dates lost 1 hour (due to timezone def?)
-allFiles$year_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$year_col), "23:00:00")) + 120*60)
-allFiles$date_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$date_col), "23:00:00")) + 120*60)
-allFiles$quarterly_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$quarterly_col), "23:00:00")) + 360*60)
 
 col_dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
 col_coastDist <- col_of_interest(allFiles, 'coastDist$')
@@ -170,6 +169,7 @@ coastlines_selection_2 <-subset(coastlines, coastlines$DATE_ACQUIRED >= as.chara
 coastlines_selection[order(as.character(coastlines_selection$pos)),]
 
 # plot Map
+# combination seems to be broken?s
 first  + mapview(coastlines_selection_2, col.regions = c("orange"), 
                  layer.name = 'obs within 90 days') +
   mapview(coastlines_selection, col.regions = c("blue"), 
@@ -181,33 +181,46 @@ first  + mapview(coastlines_selection_2, col.regions = c("orange"),
 #' now multi temporal
 #' 
 #---------------------------
-allFiles_gt0 <- subset(arrange(allFiles, pos, DATE_ACQUIRED), coastDist >=0)
+
+# drops NA values
+allFiles_dropNA <- subset(arrange(allFiles, pos, DATE_ACQUIRED), !is.na(coastDist))
+# consider to not drop them but fill them with median value of that year?
+# probably only necessary when all observations need to be maintained in matrix
+# in case of calculating rolling average etc. 
+
+# drop POS near  river mouths
+# 139000 - 147000 (suriname Rivier)
+# 242000 -252000  (saramacca rivier / coppename)
+
+allFiles_dropNA <- subset(allFiles_dropNA, !(pos %in% posToExclude))
+
+
+
 
 # # re-calculate median value per year, per transect position
-# allFiles_gt0 <- allFiles_gt0 %>% group_by(pos, year_col, coast_outlier) %>%
+# allFiles_dropNA <- allFiles_dropNA %>% group_by(pos, year_col, coast_outlier) %>%
 #   mutate(coast_median = median(coastDist))
 
 # set outlier median dist to NA
-# allFiles_gt0$coast_median[allFiles_gt0$coast_outlier == 0] <- NA
+# allFiles_dropNA$coast_median[allFiles_dropNA$coast_outlier == 0] <- NA
 # 
-# allFiles_gt0$coast_median[is.na(allFiles_gt0$coast_median)] <- 
-#   with(allFiles_gt0, ave(coast_median, allFiles_gt0$year_col, 
+# allFiles_dropNA$coast_median[is.na(allFiles_dropNA$coast_median)] <- 
+#   with(allFiles_dropNA, ave(coast_median, allFiles_dropNA$year_col, 
 #                          FUN = function(x) median(x, na.rm = TRUE))
-#   )[is.na(allFiles_gt0$coast_median)]
+#   )[is.na(allFiles_dropNA$coast_median)]
 
-
-group_dates<-unique(allFiles_gt0$year_col)
-group_quart <- unique(allFiles_gt0$quarterly_col)
-group_pos <- unique(allFiles_gt0$pos)
+group_dates<-unique(allFiles_dropNA$year_col)
+group_quart <- unique(allFiles_dropNA$quarterly_col)
+group_pos <- unique(allFiles_dropNA$pos)
 
 
 # # get for all transects an coastline observation near
 ## reference date as baseline
-allFiles_gt0$baseline <- 0 
-allFiles_gt0$slope <- -1
-allFiles_gt0$baseline2 <- 0
-allFiles_gt0$grp <- NA
-
+allFiles_dropNA$baseline <- 0
+# allFiles_dropNA$slope <- -1
+# 
+allFiles_dropNA$baseline2 <- 0
+# allFiles_dropNA$grp <- NA
 
 for (sid in allPos) {
   # sid = 189000
@@ -215,14 +228,14 @@ for (sid in allPos) {
   # get a reference distance 
   # e.g. observation closest to reference date OR
   # median observation over 1 year near the reference date 
-  subsetAllObs <- subset(allFiles_gt0, allFiles_gt0$pos == sid &
-                        allFiles_gt0$coastDist >= 0) 
+  subsetAllObs <- subset(allFiles_dropNA, allFiles_dropNA$pos == sid &
+                        allFiles_dropNA$coastDist >= 0) 
   nonOutliersAll <- subset(subsetAllObs, coast_outlier == 1)
   
   # nonOutliersAll$grp[nonOutliersAll$coast_outlier == 1]
   # 
-  idx <- which(allFiles_gt0$pos == sid &
-                 allFiles_gt0$coastDist >= 0)
+  idx <- which(allFiles_dropNA$pos == sid &
+                 allFiles_dropNA$coastDist >= 0)
   
   # you'd want to normalize for the coastline position around the reference date
   # get first date after reference date:
@@ -231,129 +244,250 @@ for (sid in allPos) {
   coastObs <- subsetAllObs[index, 'coastDist']
   coastObs2 <- subsetAllObs[index, 'coast_median']
 
-  allFiles_gt0$baseline[idx] <- as.numeric(coastObs)
-  allFiles_gt0$baseline2[idx] <- as.numeric(coastObs2) # median val
-  
-  # group by 5/10/15?? non Outlier observation
-  nonOutliersAll <- nonOutliersAll %>% 
-    dplyr::group_by(DATE_ACQUIRED) %>% 
-    as_tibble() %>% 
-    dplyr::mutate(grp = floor(1 + (row_number() - 1) / 5)) #%>%
-    # pull(grp) # if needed as seperate vector?
-
-  groups_of_obs <- unique(nonOutliersAll$grp)
+  allFiles_dropNA$baseline[idx] <- as.numeric(coastObs)
+  allFiles_dropNA$baseline2[idx] <- as.numeric(coastObs2) # median val
   
   # probably move this to pre-processing
   # also the slope is not a very visual signal yet. 
   # It is a good indication of magnitude though
   
-  # for every 5 observation:
-  for (qdate in groups_of_obs){
+  # group by 5/10/15?? non Outlier observation
+  # nonOutliersAll <- nonOutliersAll %>% 
+  #   dplyr::group_by(DATE_ACQUIRED) %>% 
+  #   as_tibble() %>% 
+  #   dplyr::mutate(grp = floor(1 + (row_number() - 1) / 5)) #%>%
+    # pull(grp) # if needed as seperate vector?
+
+  # groups_of_obs <- unique(nonOutliersAll$grp)
+
+  # for every so many observations 5 observation:
+  # determine slope
+  # for (qdate in groups_of_obs){
     # qdate <- groups_of_obs[2]
     
     # observation dates
-    obs_dates <- as.Date(nonOutliersAll[nonOutliersAll$grp == qdate, ]$DATE_ACQUIRED)
-    
-    # indices inside original data.frame
-    i <- which(allFiles_gt0$pos == sid & as.Date(allFiles_gt0$DATE_ACQUIRED) 
-               %in% as.Date(obs_dates)) # create a logical index
-  
-    subsetPos <- unique(subset(allFiles_gt0, allFiles_gt0$pos == sid &
-                  as.Date(allFiles_gt0$DATE_ACQUIRED) %in% as.Date(obs_dates) &
-                  allFiles_gt0$coastDist >= 0)) 
-    
-    # plot(as.Date(subsetPos$DATE_ACQUIRED), subsetPos$coastDist,
-    #      xlab="DATE_ACQUIRED", ylab="coastDist [m]",
-    #      main = paste0('coastline position: ',twoD_pos, ' [m]'))
-    # points(as.Date(subsetPos[subsetPos$coast_outlier == 0, 'DATE_ACQUIRED']),
-    #        subsetPos[subsetPos$coast_outlier == 0, 'coastDist'],
-    #        col = 'red')
-
-    outliers <- subset(subsetPos, coast_outlier == 0)
-    nonOutliers <- subset(subsetPos, coast_outlier == 1)
-    
-    if(nrow(nonOutliers) <2){
-      coastObs <- 0 # if there is no observation in the transect set coast & slope to 0
-      slope <- NA
-    } else {
-    
-      # calculate linear fit
-      lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
-      intercept <-lm.out$coefficients[1]
-      slope <- round(lm.out$coefficients[2], 5)
-
-      # resid <- lm.out$residuals
-      # maxResid <- which.max(abs(resid))
-      estimated <- intercept + (as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))*slope)
-
-      # plot(as.Date(subsetPos$DATE_ACQUIRED), subsetPos$coastDist, ylim = c(min(subsetPos$coastDist)-30,max(subsetPos$coastDist)+ 30))
-      # points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
-      
-      # plot the fitted line
-      # abline(lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))),lty = 2)
-      
-      }
-    
-   
-    allFiles_gt0$slope[i] <- as.numeric(slope)
-  }
+    # obs_dates <- as.Date(nonOutliersAll[nonOutliersAll$grp == qdate, ]$DATE_ACQUIRED)
+    # 
+    # # indices inside original data.frame
+    # i <- which(allFiles_dropNA$pos == sid & as.Date(allFiles_dropNA$DATE_ACQUIRED) 
+    #            %in% as.Date(obs_dates)) # create a logical index
+    # 
+    # subsetPos <- unique(subset(allFiles_dropNA, allFiles_dropNA$pos == sid &
+    #               as.Date(allFiles_dropNA$DATE_ACQUIRED) %in% as.Date(obs_dates) &
+    #               allFiles_dropNA$coastDist >= 0)) 
+    # 
+    # 
+    # 
+    # outliers <- subset(subsetPos, coast_outlier == 0)
+    # nonOutliers <- subset(subsetPos, coast_outlier == 1)
+    # 
+    # if(nrow(nonOutliers) <2){
+    #   coastObs <- 0 # if there is no observation in the transect set coast & slope to 0
+    #   slope <- NA
+    # } else {
+    # 
+    #   # calculate linear fit
+    #   lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
+    #   intercept <-lm.out$coefficients[1]
+    #   slope <- round(lm.out$coefficients[2], 5) # change per unit of x (=days)
+    #   
+    #   m_per_year <- slope*365
+    # 
+    #   # resid <- lm.out$residuals
+    #   # maxResid <- which.max(abs(resid))
+    #   # estimated <- intercept + (as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))*slope)
+    #   
+    #   
+    #   # plot(as.Date(subsetPos$DATE_ACQUIRED), subsetPos$coastDist,
+    #   #      xlab="DATE_ACQUIRED", ylab="coastDist [m]",
+    #   #      main = paste0('coastline position: ',sid, ' [m]'),
+    #   #      ylim = c(min(subsetPos$coastDist)-30,max(subsetPos$coastDist)+ 30))
+    #   # points(as.Date(subsetPos[subsetPos$coast_outlier == 0, 'DATE_ACQUIRED']),
+    #   #        subsetPos[subsetPos$coast_outlier == 0, 'coastDist'],
+    #   #        col = 'red')
+    #   
+    #   # plot the fitted line
+    #   # abline(lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))),lty = 2)
+    #   
+    #   }
+    # 
+    # 
+    # allFiles_dropNA$slope[i] <- as.numeric(m_per_year)
+  #}
 }
 
-
-# subtract each that values from each obs (ensure positive values)
-# to normalize
-allFiles_mutate <- allFiles_gt0 %>% mutate(year = year(DATE_ACQUIRED),
+allFiles_mutate <- allFiles_dropNA %>% mutate(year = year(DATE_ACQUIRED),
                                                month = month(DATE_ACQUIRED, label=TRUE),
                                                day = day(DATE_ACQUIRED),
                                                full_date= date(DATE_ACQUIRED),
                                                years = date(quarterly_col))
 
 # subtract baseline value from original
+# Baseline is either a observation close to reference date. (baseline)
+# Or the annual median observation of they reference date (baseline2)
 allFiles_mutate$normalized <- allFiles_mutate$coastDist - allFiles_mutate$baseline
 allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$baseline2
-# subtract baseline value from median
-# allFiles_mutate$mn_normalized <- allFiles_mutate$mn - allFiles_mutate$baseline
-
-
 
 # test simple 2d plot 
-twoD_pos <- 299000
+twoD_pos <- 224000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
 # filter outliers & negative coastal distances
 # doesn't make the figure more readable... Exclude for now 
 # allFiles_mutate <- allFiles_mutate %>% 
   # filter(!(coastDist == -1) & outlier == 0) 
-plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
-     xlab="alongshore position", ylab="mudbank distance [m]",
-     main = paste0('position: ',twoD_pos, ' [m]'))
-points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, 'DATE_ACQUIRED']),
-       subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, 'coastDist'],
-       col = 'red')
-points(as.Date(subset2d_for_testPlot$DATE_ACQUIRED),  subset2d_for_testPlot$coast_median,
-       col = 'blue')
 
-plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED[!is.na(subset2d_for_testPlot$slope)]),
-     subset2d_for_testPlot$slope[!is.na(subset2d_for_testPlot$slope)])
-abline(0, 0)
+runnAve <- data.frame(dated=as.Date(subset2d_for_testPlot$DATE_ACQUIRED), 
+                     Color = zoo::rollmean(subset2d_for_testPlot$locf, 10, 
+                                           fill = NA),
+                     col2 = zoo::rollmean(subset2d_for_testPlot$coastDist, 5, 
+                                          fill = NA),
+                     col3 = zoo::rollmean(subset2d_for_testPlot$coast_median, 1, 
+                                          fill = NA))
+
+# plot temporal evolution for given transect
+
+# now in ggplot form
+subset2d_for_testPlot$DATE_ACQUIRED <- as.Date(subset2d_for_testPlot$DATE_ACQUIRED)
+
+ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=coast_outlier)
+  geom_point(size = 3, color = "white") +
+  geom_point(aes(colour = factor(coast_outlier)), alpha = 0.5) + 
+  scale_x_date(labels = date_format("%Y")) +
+  labs(x = "year", y = "Distance coastline position") +
+  # geom_smooth(mapping = aes(x= DATE_ACQUIRED, y = coastDist)) +
+  geom_line(data=runnAve, aes(dated, col3)) +
+  scale_color_manual(name = "outlier",
+                     values = c("red", "black"),
+                     labels = c("outlier", "coastal distance")) +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.key = element_rect(fill = NA),
+        # legend.text = element_text(size = 15),
+        
+        # legend.position = c(.78, .5),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+
+
+
+
+# plot annual coastline change
+# pre-requisites: 
+# groups of angles
+
+ggplot(data=allFiles_mutate, aes(bearing)) +
+  geom_histogram(binwidth = 2)
+
+angles <-  c(0,5,10,15,20,180, 290, 
+             300, 310, 320, 330, 335, 340, 345, 350, 355, 360)
+
+angle_group <- unique(cut(allFiles_mutate$bearing, angles))
+allFiles_mutate$angle_group <- cut(allFiles_mutate$bearing,angles)
+
+# epochs: <20000, 2000 - 2010, 2010-2020
+allFiles_mutate$fiveyear <- as.Date(cut(lubridate::date(allFiles_mutate$DATE_ACQUIRED), 
+                              "5 year"))
+
+
+# exclude river mouth obs
+allFiles_mutate <- subset(allFiles_mutate, !(pos %in% posToExclude))
+
+# For now exlude rediculous large slope values
+allFiles_mutate <- subset(allFiles_mutate, !(slope > 500 |
+                            slope < -500))
+
+xaxis <- 'pos'
+
+# distribution of transect bearings
+ggplot(allFiles_mutate, aes(x=eval(as.name(xaxis)), y = coast_median)) +
+  # facet_wrap(paste0('~', 'fiveyear')) + # labeller = as_labeller(unlist(variable_names))
+  geom_point(aes(colour = factor(fiveyear))) +
+  scale_x_reverse() # west to east orientation
+
+level_order <- c("(180,290]","(290,300]", "(300,310]", "(310,320]", "(320,330]", 
+                 "(330,335]", "(335,340]", "(340,345]", "(345,350]",
+                 "(350,355]", "(355,360]",
+                 "(0,5]", "(5,10]", "(10,15]", "(15,20]", "(20,180]")
+allFiles_mutate$angle_group<-factor(allFiles_mutate$angle_group, levels=level_order)
+variable_names <- data.frame(matrix(ncol = 3, nrow = 1))
+
+for(i in seq_len(length(level_order))){
+  # i <- 1
+  level_order[i] 
+  
+  variable_names[i,1] <- qdapRegex::ex_between(as.character(level_order[i] ), "(", "]")[[1]]
+  variable_names[i,2] <- startNr <- as.numeric(qdapRegex::ex_between(
+    as.character(level_order[i] ), "(", ",")[[1]])
+  variable_names[i,3] <- endNr <- as.numeric(qdapRegex::ex_between(
+    as.character(level_order[i] ), ",", "]")[[1]])
+  
+}
+
+#plot bearing over rate of change
+# if facet wrap enabled, per 4 yer timestep
+# per 10 is probably better?
+ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
+  facet_wrap(paste0('~', 'fiveyear'), labeller = as_labeller(unlist(unique(allFiles_mutate$fiveyear)))) + 
+  geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6) +          # boxplot properties
+  scale_x_discrete(labels=c(variable_names[,1])) +
+  labs(y = "annual rate of change [m/yr]", x ='transect bearing') +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 14, hjust = 1, 
+                               face = "bold", angle = 45),
+    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.x = element_text(size = 18, face = 'bold'),
+    axis.title.y = element_text(size = 18, face = 'bold'),
+    
+    strip.background = element_rect(fill = "white", colour = "white"),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 18),
+    # legend.position = c(.9, .8),
+    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    
+    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
+  )
+
+
+# check out the slope values 
+# plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED[!is.na(subset2d_for_testPlot$slope)]),
+#      subset2d_for_testPlot$slope[!is.na(subset2d_for_testPlot$slope)])
+# abline(0, 0)
 
 outliers <- to_spatial_df(subset(subset2d_for_testPlot, coast_outlier == 0), 
                           'coastX', 'coastY')
 nonOutliers <- to_spatial_df( subset(subset2d_for_testPlot, coast_outlier == 1), 
                               'coastX', 'coastY')
 
-first +
-  mapview(nonOutliers, col.regions = c("blue"),layer.name = 'nonOutliers') +
+first + #mapview(nonOutliers, col.regions = c("blue"),layer.name = 'nonOutliers') +
   mapview(outliers, col.regions = c("red"),layer.name = 'outliers') +
-  mapview(transects)
+  #mapview(transects)
 
 # allFiles_mutate$pos <- factor(allFiles_mutate$pos,levels=rev(unique(allFiles_mutate$pos)))
 
-p <-ggplot(allFiles_mutate,aes(x = pos,y = as.Date(quarterly_col), fill=normalized2))+ 
+p <-ggplot(allFiles_mutate,aes(x = pos,y = as.Date(quarterly_col), fill=slope))+ 
   geom_tile(color= "white",size=0.1) +
   # scale_fill_gradient2(low="red", mid="white", breaks = c(-100,0,100),
                         # high="blue", midpoint =0)
-  scale_fill_gradient2(limits = c(-1000,1000), breaks = c(-800, -400, 0, 400, 800),
+  scale_fill_gradient2(limits = c(-300,300), breaks = c(-300, -150, 0, 150, 300),
                        low = "#a50026", high = "#313695", mid = '#f7f7f7',
                        # na.value = "grey50",
                         guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
@@ -397,8 +531,11 @@ p
 # this might become problematic when time series are increasing because:
 # dist might still be positive while actually the trend is negative 
 # also vice versa, increasing coastlineDist while the abs value is still negative.
-# different shades help, but don't solve it completely. 
-# try to use the coeffients from linear fits per 3 months?
+
+# try to use the slope, fine tune how many observations are needed for slope?
+# at the moment it is 5 observations which might be a bit small.
+# or consider both the absolute distance plot ==> order of magnitude
+# and the slope ==> moment of change + magnitude
 
 
 

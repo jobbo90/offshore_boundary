@@ -38,6 +38,8 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
+# library(rgee)
+Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -74,9 +76,11 @@ for (q in seq_along(years)) {
                          ))
 }
 filtered <- unique(filtered)
-allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
-                                                                                sep = ',', na.strings=c("","NA")
-                                                                                ))))
+allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1], 
+                                         function(x) read.csv(x, stringsAsFactors = FALSE,
+                                                              sep = ',', 
+                                                              na.strings=c("","NA")
+                                                              ))))
 # testReada <- read.csv(as.matrix(filtered)[1,1],
          # sep = ',', na.strings=c("","NA"))
 
@@ -206,7 +210,7 @@ legend("topleft",
        col = c('black', 'red', 'blue'),
        pt.cex = 2,pch = c(1,1))
 
-mudbankPos <- to_spatial_df( subset(subset_for_testPlot, mudbank_outlier == 0), 
+mudbankPos <- to_spatial_df(subset(subset_for_testPlot, mudbank_outlier == 0), 
                              'x', 'y')
 
 

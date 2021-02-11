@@ -38,6 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
+Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -46,10 +47,23 @@ source("./src/functions.R")
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/raw'
-years <-  seq(from = 2008, to = 2009, by = 1)
+
+# seq1 <- seq(1985, 1999, 1)
+seq2 <- seq(2000, 2001, 1)
+seq3 <- seq(2008, 2009, 1)
+
+years <- c(seq2, seq3)# seq(from = 1985, to = 2020, by = 1)
+
+# pos to exlcude for mudbank boundary estimates / outlier detection
+posToExclude <- c(seq(138000,147000,1000),
+                  seq(241000, 255000, 1000))  
+
+
   #c('2005', '2006','2007', '2008','2009') 
 
-min_Std <- 100 # minimal amount of meters difference before concidered outlier
+min_Std <- 25 # minimal amount of meters difference before considered outlier
+year_limit <- 4 # search window in years for finding coastline obs when insufficient values per year.
+min_obs_rosner <- 10    # Amount of obs per year needed to perform Rosner Test
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.names = T))
@@ -57,15 +71,18 @@ df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 aoi <-  c('Suriname') 
+path_rows <- c('229_56')
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
   for (x in seq_along(aoi)){
+    for (pr in path_rows){ 
       # q <- 8
       year = as.character(years[q])
       region = aoi[x]
       
-      filters = c(year, region)
+      
+      filters = c(year, region, pr)
       
       filtered = rbind(filtered, df %>% 
                          dplyr::filter(
@@ -76,7 +93,7 @@ for (q in seq_along(years)) {
                              # get a logical vector of rows to keep
                              purrr::pmap_lgl(all)
                          ))}
-}
+}}
 filtered <- unique(filtered)
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
@@ -92,10 +109,11 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
 uniqueDates <- unique(allFiles[,col_dates]);
 
-keep_columns <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
-                  'originX', 'originY', 'coastX', 'coastY')
-# keep_columns <- colnames(allFiles)
+# keep_columns <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
+#                   'originX', 'originY', 'coastX', 'coastY')
 
+drop <- c('system.index', '.geo')
+keep_columns <- colnames(allFiles)[!(colnames(allFiles) %in% drop)]
 mudbanks <- reshape_csvPoints(allFiles, 'peakCoordX', 'peakCoordY', keep_columns)
 
 # change to NA
@@ -104,21 +122,28 @@ mudbanks$coastDist[mudbanks$coastDist == -1] <- NA
 # sort al rows based on position & date
 mudbanks<-mudbanks[with(mudbanks, order(pos, DATE_ACQUIRED)), ]
 
-# make groups of 3 months per transect
+# make groups per year, 3 months and 3 years per transect
 mudbanks <- mudbanks %>%
   mutate(quarterly_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED),
                                      "3 month"))) %>%
   mutate(date_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED), 
                                 "3 year"))) %>%
+  mutate(five_year_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED), 
+                                "5 year"))) %>%
   mutate(year_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED),
                                 "1 year"))) 
+
 
 group_dates<-unique(mudbanks$year_col)
 group_pos <- unique(mudbanks$pos)
 group_years <- unique(mudbanks$date_col)
 
+five_years <- unique(mudbanks$five_year_col)
+
 # assume nothing is outlier
 mudbanks$coast_outlier <- 1
+mudbanks$slope         <- NA
+mudbanks$coastObs      <- NA
 
 #'
 #'  estimate coastal outliers with rosner test
@@ -127,61 +152,231 @@ mudbanks$coast_outlier <- 1
 #'  Still poses problems for some transects
 #'  Resulting in negative mudbank distances, especially at transects 
 #'  near river mouths. 
+#'  Also test for years with low obs?! 1985 - 2000
 
-for(i in group_years){
-  # i<-group_dates[group_dates == c("2008-01-01")]
+
+for(i in five_years){
+  
+  start <- Sys.time()
+  # i<-five_years[five_years == c("1991-01-01")]
   
   for(q in group_pos){
-    # pos_to_test <- 	250000
-    # q <- group_pos[group_pos == pos_to_test]
+    # pos_to_test <- 	235000
+    # q <- group_pos[group_pos == 116000]
     # print(q)
-    # subsets2 <- subset(mudbanks,  pos == q & 
-    #                      date_col == i &
-    #                      coastDist > -1) # test if NA cause trouble for Rosner function
-    # 
-    indexs <- which(mudbanks$date_col == i & 
+    
+    indexs <- which(mudbanks$five_year_col == i & 
                       mudbanks$pos == q &
                       mudbanks$coastDist > -1)
     
     subsets3 <- mudbanks[indexs, ]
-    # rownr <- as.character(indexs)
+    # get nearest observation and add it to the list
+    # is .na going to throw a problem?
+    reference_date <- mean(as.Date(subsets3$DATE_ACQUIRED))
     
-    #somehow row numbers are altered
+    # Aamount of obs
+    obs_3years <- nrow(subsets3)
+
+    # update that if subset per year is to small, include extra observations?
+    # So grow the subset to at least 10(?) obs by adding nearest observations
+    maxAttemp <- 0 # make sure you don't get stuck in infinite loop..
+    while(nrow(subsets3) < min_obs_rosner & 
+          # nrow(subsets3)+obs_3years > min_obs_rosner &
+          maxAttemp < min_obs_rosner+5){
+      
+
+      
+      # exclude dates from the year of interest
+      # sample from entire dataset so that years outside the 3 year block
+      # are also possible candidates
+      # pitfall: any date is possible, also the ones to far away
+      # so set limit at search window of x years?
+
+      selectedDates <- subset(mudbanks, mudbanks$pos == q &
+                              mudbanks$coastDist > -1 & 
+                              !(mudbanks$DATE_ACQUIRED %in% 
+                                  subsets3$DATE_ACQUIRED)
+                            )$DATE_ACQUIRED
+      
+      
+      # exclude the ones already selected
+      # are NA a problem that seems to throw warnings()?
+      nearestDate <- selectedDates[1:length(selectedDates) == 
+                       which.min(replace(abs(as.Date(selectedDates) - reference_date), 
+                                         abs(as.Date(selectedDates) - reference_date)>year_limit*356, NA))]
+      
+      # if nothing is found, break the loop
+      if(length(nearestDate) == 0){break}
+      
+      index_nearest <- which(as.Date(as.character(mudbanks$DATE_ACQUIRED)) == nearestDate & 
+                         mudbanks$pos == q &
+                         mudbanks$coastDist > -1)
+      
+      # update subsets 
+      subsets3 <- rbind(subsets3, mudbanks[index_nearest, ] )
+      
+      maxAttemp = maxAttemp + 1
+    }
+      
+    # because subsets 3 changed in size, recalc the indices.
+    subsets3_recal <- which(mudbanks$DATE_ACQUIRED %in% subsets3$DATE_ACQUIRED &
+                             mudbanks$pos == q &
+                             mudbanks$coastDist > -1)
+      
+    # apply rosner test if there is sufficient observations ==> this implies that the timeseries to look at needs to be larger than 3 years.
+    # also the year limit needs to go up.
+    # All detected outliers with larger std value recieve outlier == 0
+      
+    # Only give the rosner output to the original subset3 indices
     mudbanks[indexs, 'coast_outlier'] <- 
-      rosner(subsets3$coastDist, min_Std)
+        rosner(subsets3$coastDist,min_Std , min_obs_rosner)[which(subsets3_recal %in% indexs)]
+      
+    # consider adding a outlier check for annual obs? 
+    # make sure it is applicable for sufficient observations only
+    # Or when it involvoves landsat 7 observations?
     
-    # test<-as.data.frame(mudbanks[row.names(mudbanks) %in% indexs, 'mudbank_outlier'])[,1]
-    
-    # testCoastline <-st_as_sf(SpatialPointsDataFrame(
-    #   data.frame(subsets2$coastX, subsets2$coastY),
-    #   proj4string=CRS("+proj=longlat +datum=WGS84"),
-    #   data = data.frame(subsets2$pos)))
 
-    # mapview(testCoastline, col.region = c('green')) + mapview(subsets2)
-    # detect outliers (give them a 0!!!)
-
-    
     # plot(as.Date(subsets3$DATE_ACQUIRED), subsets3$coastDist,
     #     main = paste0(q), xlab = 'date', ylab = 'coastline position')
-    # points(as.Date(subsets3$DATE_ACQUIRED)[which(rosner(subsets3$coastDist, min_Std) == 0)],
-    #        subsets3$coastDist[which(rosner(subsets3$coastDist, min_Std) == 0)],
+    # 
+    # points(as.Date(subsets3$DATE_ACQUIRED)[which(rosner(subsets3$coastDist, min_Std, min_obs_rosner) == 0)],
+    #        subsets3$coastDist[which(rosner(subsets3$coastDist, min_Std, min_obs_rosner) == 0)],
     #        col = 'red')
 
   }
+  
+  end <- Sys.time()
+  dif<- difftime(end, start, "mins")
+  print(paste0(as.Date(i) ,' in ', round(dif,1)))
+  
 }
 
-# calculate last observation carried forward
-# initialy set at the observed value
+
+
+#'
+#'  calculate slope
+#'  - include nearest observations
+#'  within predefined search window (4 years difference max)
+#'  
+for(i in group_dates){
+  start <- Sys.time()
+  for(q in group_pos){
+    # i<-group_dates[group_dates == c("1998-01-01")]
+    # 
+    # pos_to_test <- 	116000
+    # q <- group_pos[group_pos == pos_to_test]
+    # print(q)
+    
+    subsets_annual <- mudbanks[which(mudbanks$year_col == i & 
+                                       mudbanks$pos == q &
+                                       mudbanks$coastDist > -1), ]
+    
+    # select outliers & non outliers
+    outliers <- subset(subsets_annual, coast_outlier == 0)
+    nonOutliers <- subset(subsets_annual, coast_outlier == 1)
+    
+    # get nearest observation and add it to the list
+    # if there is nothing there; half way through the year
+    reference_date <- as.Date(ifelse(nrow(nonOutliers)>0, 
+                             mean(as.Date(nonOutliers$DATE_ACQUIRED)), 
+                             as.Date(i)+days(180)))
+    
+    # improvement required! 
+    # slope is only applicable if quality of coastline estimate is 
+    # sufficient (see landsat 7 case with no data in wetland areas)
+    # if outlier detection is sufficient the slope can be correctly estimated
+    
+    
+    # if  there is insufficient observations;
+    # search for additional observations to calculate the slope
+    # downside; if the observations that are detected are of good quality,
+    # the slope is wronfully adjusted based on neighbouring observations
+    # resulting in wrong estimate (often underestimate!) of rate of change.
+
+    maxAttemp <- 0
+    while(nrow(nonOutliers) < 8 & 
+          maxAttemp < min_obs_rosner){
+
+      # exclude the ones from the original year
+      selectDates <- subset(mudbanks, mudbanks$pos == q &
+                              mudbanks$coastDist > -1 & !(mudbanks$DATE_ACQUIRED %in% 
+                                                            nonOutliers$DATE_ACQUIRED))$DATE_ACQUIRED
+      
+      # get nearest date (excluding dates outside limit)
+      nearestDate <- selectDates[1:length(selectDates) == 
+                                   which.min(replace(abs(as.Date(selectDates) - reference_date), 
+                                                     abs(as.Date(selectDates) - reference_date)>year_limit*356, NA))]
+      
+      if(length(nearestDate) == 0){break}
+      index_nearest <- which(as.Date(as.character(mudbanks$DATE_ACQUIRED)) == nearestDate & 
+                               mudbanks$pos == q &
+                               mudbanks$coastDist > -1 &
+                               mudbanks$coast_outlier == 1)
+      
+      # update annual subset
+      nonOutliers <- rbind(nonOutliers, mudbanks[index_nearest, ] )
+      
+      maxAttemp = maxAttemp + 1
+      
+      
+    }
+    
+    # only fit a line if there is a least 5 valid observations.
+    if(nrow(nonOutliers) < 5){
+      
+      m_per_year <- NA
+    } else {
+      
+      # calculate linear fit
+      lm.out <- lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED)))
+      
+      # intercept <-lm.out$coefficients[1]
+      slope <- round(lm.out$coefficients[2], 5) # change per unit of x (=days)
+      
+      m_per_year <- slope*365
+      
+    }
+    
+    # update all slope values from the original years (incl. coastdist -1 and outliers) 
+    mudbanks$slope[which(mudbanks$year_col == i & 
+                           mudbanks$pos == q)] <- as.numeric(m_per_year)
+    mudbanks$coastObs[which(mudbanks$year_col == i & 
+                              mudbanks$pos == q)] <- as.numeric(nrow(nonOutliers))
+    
+    
+  }
+  end <- Sys.time()
+  dif<- difftime(end, start, "mins")
+  print(paste0(as.Date(i) ,' in ', round(dif,1), ' mins'))
+  
+  # plot(as.Date(nonOutliers$DATE_ACQUIRED), nonOutliers$coastDist,
+  #   main = paste0(q), xlab = paste0(i), ylab = 'coastline position',
+  #   ylim=c(min(nonOutliers$coastDist)-30,max(nonOutliers$coastDist)+30),
+  #   xlim=c(min(as.Date(nonOutliers$DATE_ACQUIRED)),
+  #         max(as.Date(nonOutliers$DATE_ACQUIRED))))
+  # # points(as.Date(outliers$DATE_ACQUIRED), outliers$coastDist, col = 'red')
+  # abline(lm(nonOutliers$coastDist~as.numeric(as.Date(nonOutliers$DATE_ACQUIRED))),lty = 2)
+  # text(min(as.Date(subsets3$DATE_ACQUIRED)) + 90,
+  #      max(subsets3$coastDist) + 25, paste0('slope = ', m_per_year, ' meter'))
+}
+
+
+#'
+#'  calculate last observation carried forward
+#'  
+
+# set initial value
 mudbanks$locf <- mudbanks$coastDist
 
-# if coastDist = -1 or coast observation is an outlier; 
-# replace with nearest observations / median value per year?
+# if coastDist NA or coast observation is an outlier; 
 indices <- unique(which(is.na(mudbanks$coastDist) | mudbanks$coast_outlier == 0))
+
 for(ind in indices){
-  # ind<-indices[2]
+  # ind<-indices[1200]
   
   data_entry <- mudbanks[ind, ]
-  # row.names(data_entry)
+  
+  # select all accepted observations from the same transect
   pos_subset <- subset(mudbanks, mudbanks$pos == data_entry$pos &
                          mudbanks$coast_outlier == 1 &
                          !is.na(mudbanks$coastDist)) 
@@ -189,10 +384,9 @@ for(ind in indices){
   # plot(pos_subset$DATE_ACQUIRED, pos_subset$locf)
   # plot(pos_subset$DATE_ACQUIRED, pos_subset$coastDist, col = 'red')
   
-  if(nrow(pos_subset) > 0){ # if no observations; locf remain original obsevation
+  if(nrow(pos_subset) > 0){ # if no observations; locf remains original observation (=NA?)
     
-    test <- abs(pos_subset$DATE_ACQUIRED - 
-                  data_entry$DATE_ACQUIRED)
+    test <- abs(as.Date(pos_subset$DATE_ACQUIRED) - as.Date(data_entry$DATE_ACQUIRED))
     
     test[test==0] <- max(test)
     minInd <- which.min(test)
@@ -200,63 +394,114 @@ for(ind in indices){
     nearest <- pos_subset[minInd,]
     
     mudbanks[row.names(mudbanks) == row.names(data_entry), 'locf'] <- 
-      nearest$coastDist
+      nearest$coastDist # fill with nearest coast obs
   }
 
 }
 
 
+#' 
+#' Coastline
+#' median observation per year 
+#' 
+#' 
+
+# order by pos
 mudbanks<-mudbanks[order(mudbanks$pos),]
 
-# median observation per year 
-# re-calculate median value per year, per transect position
+# calculate median coastal position
+# grouped by pos, year and outlier
 mudbanks <- mudbanks %>% dplyr::group_by(pos, year_col, coast_outlier) %>%
   dplyr::mutate(coast_median = median(coastDist, na.rm = T))
 
-# set outlier median dist to NA
-# this median is used to normalize all mudbank distances
+# set outlier groups to NA
 mudbanks$coast_median[mudbanks$coast_outlier == 0] <- NA
 
-# fill outliers with nearest median coastal observation
-# not ideal because some observations (start of year/end of year)
-# recieve median value from previous year...
-mudbanks <- mudbanks %>% group_by(pos, year_col) %>% mutate(coast_median = na.locf(na.locf(coast_median, na.rm=FALSE,
-                                                                                           fromLast = T)))
+# fill outliers with median coastal observation of that year
+mudbanks <- mudbanks %>% 
+  group_by(pos, year_col) %>%
+  # mutate(key = row_number()) %>% # assign a incrementing key value per group as defined in group_by
+  # select(-key) %>%
+  # group_by(pos, year_col) %>%
+  fill(coast_median) %>% 
+  select(-key)
 
-mudbanks$mudbank_distance <- mudbanks$axisDist - mudbanks$coast_median  
+# key to indicate groups of years~
+mudbanks$key <- with(rle(as.numeric(mudbanks$year_col)), rep(seq_along(lengths), lengths))
 
-# some examples
-mudbanks_select <-subset(mudbanks, mudbanks$DATE_ACQUIRED == uniqueDates[2] & 
-                              mudbanks$axisDist >= 0 & 
-                              mudbanks$mudbank_distance >= 0) 
+#'
+#'  calculate for each pos, each year gain/loss compared to previous year
+#'  
 
-# test simple 2d plot 
-twoD_pos <- 100000#190000
-subset2d_for_testPlot <- subset(mudbanks, pos == twoD_pos)
+# fill outliers with median coastal observation of that year
+mudbanks <- mudbanks %>% 
+  group_by(pos) %>%
+  arrange(key) %>%
+  mutate(deltaCoast = coast_median - lag(coast_median, default = max(coast_median)))%>% 
+  group_by(key) %>%
+  mutate(deltaCoast=max(deltaCoast, na.rm=F))
 
-plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
-     xlab="DATE_ACQUIRED", ylab="coastDist [m]",
-     main = paste0('coastline position: ',twoD_pos, ' [m]'))
-points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
-       subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
-       col = 'red')
-lines(as.Date(subset2d_for_testPlot$DATE_ACQUIRED),  subset2d_for_testPlot$coast_median,
-       col = 'blue')
-# plot(mudbanks_select$pos, mudbanks_select$locf)
-# points(mudbanks_select$pos, mudbanks_select$locf, col = 'red')
 # 
+# # test simple 2d plot
+# twoD_pos <- 322000
+# #190000
+# subset2d_for_testPlot <- subset(mudbanks, pos == twoD_pos)
+# 
+# plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
+#      xlab="DATE_ACQUIRED", ylab="coastDist [m]",
+#      main = paste0('coastline position: ',twoD_pos, ' [m]'))
+# points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
+#        subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
+#        col = 'red')
+# lines(as.Date(subset2d_for_testPlot$DATE_ACQUIRED),  subset2d_for_testPlot$coast_median,
+#        col = 'blue')
 
 
+################################################################################
 #' filter mudbank boundary outliers
 #' 
 #' - Filter on neighborhood (previous 2, current and next two points)
 #'     Use distance to see if the point is deviating
 #'     Consider using fraction..
+#'     
+#'     good example dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
+################################################################################
 
-# good example dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
+# mudbank Distance
+mudbanks$mudbank_distance <- mudbanks$axisDist - mudbanks$coast_median  
+
+# some examples
+mudbanks_select <-subset(mudbanks, mudbanks$DATE_ACQUIRED == uniqueDates[2] & 
+                           mudbanks$axisDist >= 0 & 
+                           mudbanks$mudbank_distance >= 0) 
 
 # set outlier: assume nothing is an outlier
 mudbanks$mudbank_outlier <- 0
+
+
+# translate other distances into coordinates
+# axisDistSlope / axisDistAbs / maxExtent(?)
+
+# bearing is already calculated for each transect, and origin is known
+# mudbanks_selection$axisDistAbs[3]
+# mudbanks_selection$originX[3]
+# mudbanks_selection$originY[3]
+# mudbanks_selection$bearing[3]
+
+
+# get for all obs the x,y coords corresponding to measured distances
+# overwrite previous mudbanks variable 
+mudbanks <- get_dists2(mudbanks, mudbanks$originX, mudbanks$originY, 
+                                  mudbanks$bearing, 
+                                  c('axisDistAbs', 'axisDistSlope', 'maxExtent'))
+
+
+
+# # make it spatial
+# SpatialPoints <- SpatialPointsDataFrame(data.frame(x= test_get$axisDistAbsX, y = test_get$axisDistAbsY),
+#                                         data = data.rame(test_get),
+#                                         proj4string=CRS("+proj=longlat +datum=WGS84"))
+# sp_axisDistAbs <- st_as_sf(SpatialPoints)
 
 
 for (i in uniqueDates){
@@ -266,6 +511,7 @@ for (i in uniqueDates){
   # select relevant observations
   mudbanks_selection <-subset(mudbanks, mudbanks$DATE_ACQUIRED == i & 
                                 mudbanks$axisDist >= 0 & 
+                                !(pos %in% posToExclude) &
                                 mudbanks$mudbank_distance >= 0)
   
   # give all excluded observation an 1 for outlier in original
@@ -287,7 +533,7 @@ for (i in uniqueDates){
 
 
   #'
-  #' test for obvious outliers on full dataset
+  #' test for obvious outliers on all obs for that image
   #' 
   
   positions_all <- as.numeric(as.character(mudbanks_selection$pos))
@@ -317,18 +563,34 @@ for (i in uniqueDates){
   mudbanks_selection <- mudbanks_selection[-outlier_ind, ]
   
   # plot
-  # plot(positions_all, distances_all, main = paste0(i),
-  #      xlab = 'alongshore position', ylab = 'cross shore dist')
+  plot(positions_all, distances_all, main = paste0(i),
+       xlab = 'alongshore position', ylab = 'cross shore dist')
   # lines(positions_all, predicted.intervals[,1],col='green',lwd=3)
+  
   # points(positions_all[outlier_ind],distances_all[outlier_ind], col = 'red')
-
+  points(positions_all, mudbanks_selection$axisDistAbs, col = 'blue')
+  points(positions_all, mudbanks_selection$axisDistSlope, col = 'red')
   # # sanity check:
   # points( as.numeric(as.character(mudbanks_selection$pos)), mudbanks_selection$mudbank_distance, col = 'blue')
   # # spatial plots
-  # mapview(mudbanks_selection, col.regions = c("green"), layer.name = 'mudbanks' ) +
-  #   mapview(outlier_selection, col.regions =c('orange'), layer.name = 'outliers')
-  # 
   
+  # make it spatial
+  SpatialPoints <- SpatialPointsDataFrame(data.frame(x= mudbanks_selection$axisDistAbsX, y = mudbanks_selection$axisDistAbsY),
+                                          data = data.frame(mudbanks_selection),
+                                          proj4string=CRS("+proj=longlat +datum=WGS84"))
+  sp_axisDistAbs <- st_as_sf(SpatialPoints)
+  
+  SpatialPoints <- SpatialPointsDataFrame(data.frame(x= mudbanks_selection$axisDistSlopeX, y = mudbanks_selection$axisDistSlopeY),
+                                          data = data.frame(mudbanks_selection),
+                                          proj4string=CRS("+proj=longlat +datum=WGS84"))
+  sp_axisDistSlope <- st_as_sf(SpatialPoints)
+  
+  
+  mapview(mudbanks_selection, col.regions = c("green"), layer.name = 'mudbanks' ) +
+    mapview(outlier_selection, col.regions =c('orange'), layer.name = 'outliers') +
+    
+    mapview(sp_axisDistAbs, col.regions =c('blue'), layer.name = 'absDist') +
+    mapview(sp_axisDistSlope, col.regions =c('red'), layer.name = 'lopeDist') 
   
   # test outlier detection for fractions
   # plot(mudbanks_selection$axisDist, mudbanks_selection$mudFract)
@@ -670,16 +932,19 @@ for (i in uniqueDates){
 
 
 for (year in unique(format(as.Date(uniqueDates), '%Y'))){
-  # year <- 2005
+  # year <- 2000
+  # print(year)
   start_year <- as.Date(ISOdate(year, 1, 1))
   end_year <- as.Date(ISOdate(year, 12, 31)) 
   
-  mudbanks_per_year <-subset(mudbanks, 
+  mudbanks_per_year <-subset(mudbanks,
                              as.Date(DATE_ACQUIRED) >= start_year &
                              as.Date(DATE_ACQUIRED) <= end_year)
 
-  write_csv(mudbanks_per_year, paste0(wd,"/data/processed/offshore_points/229_56", 
+  write_csv(mudbanks_per_year, paste0(wd,"/data/processed/offshore_points/229_56",
                                       '_', year, '_offshore.csv'))
-  
+  print(paste0(wd,"/data/processed/offshore_points/229_56",
+               '_', year, '_offshore.csv'))
   
 }
+

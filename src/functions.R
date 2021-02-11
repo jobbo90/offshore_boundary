@@ -32,7 +32,7 @@ col_of_interest <- function(csv, patt){
   #' @return integer
   #' 
   #' fix the pattern, with end of line issue.
-  return(grep(paste( '^', patt, sep = ''), colnames(csv), fixed = F))
+  return(grep(paste( '^', patt, '$', sep = ''), colnames(csv), fixed = F))
 }
 
 reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
@@ -44,8 +44,8 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   
   # csv <- allFiles
   
-  # patternX <- 'x'
-  # patternY <- 'y'
+  # patternX <- 'peakCoordX'
+  # patternY <- 'peakCoordY'
   # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
   #                   'originX', 'originY', '.geo')
   # cols_to_keep <- keep_columns
@@ -61,56 +61,73 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   
   # grep(paste( '^', patternX, sep = ''), colnames(csv), fixed = F)
   
+  # amount of transects
   uniqueX<- unique(csv[, col_of_interest(csv,'originX$')]);
   uniqueY<- unique(csv[, col_of_interest(csv,'originY$')]);
-  geo<- unique(csv[, col_of_interest(csv, '.geo')]);
+  # geo<- unique(csv[, col_of_interest(csv, '.geo')]);
   
   # define output matrices
-  allPoints <- vector('list', length(csv))
+  allPoints <- vector('list', nrow(csv))
   
   for (n in 1:length(uniqueX)){
-    # n<-1
+    # n<-5
     
     # Coordinates of transects
-    coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
-    all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
-    
-    begin_coords <- data.frame(lon = as.numeric(all_digits[1]), #x
-                               lat = as.numeric(all_digits[2])) #y
-    
-    end_coords <- data.frame(lon = as.numeric(all_digits[3]),
-                             lat = as.numeric(all_digits[4]))  
+    # coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
+    # all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
+    # 
+    # begin_coords <- data.frame(lon = as.numeric(all_digits[1]), #x
+    #                            lat = as.numeric(all_digits[2])) #y
+    # 
+    # end_coords <- data.frame(lon = as.numeric(all_digits[3]),
+    #                          lat = as.numeric(all_digits[4]))  
     # x <- as.matrix(rbind(begin_coords, end_coords))
 
     # only return observations if patternX >= 0 and if coordinates
-    test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')] == uniqueX[n]
-                            & csv[,col_of_interest(csv, paste( '^', patternX, sep = ''))] != -1 )
+    
+    test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')] 
+                            == uniqueX[n])
+    # will this X > 0 remove missed observations of coastlines of pattern x. 
+    #& csv[,col_of_interest(csv, paste( '^', patternX, sep = ''))] != -1 )
 
     if(nrow(test1transect) > 0){ # some transect had no obs in any of the images
       
-    
     # subset <- test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), col_of_interest(csv, 'DATE_ACQUIRED$'),
     #                                 col_of_interest(csv, 'pos$')))]
     
     # coordiates of points of interest (coastline, offshore boundary etc)
     df_out <- data.frame(x = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternX, sep = ''))]),
-                         y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))]),
-                         DATE_ACQUIRED = as.Date(as.character(test1transect[,col_of_interest(csv, 'DATE_ACQUIRED$')])),
-                         pos = as.numeric(as.character(test1transect[,col_of_interest(csv, 'pos$')]))
+                         y = as.numeric(test1transect[,col_of_interest(csv, paste( '^', patternY, sep = ''))])
                          )
-    
-    for (c in cols_to_keep){
-      # c<- cols_to_keep[7]
-      # print(c)
-      vals = as.numeric(test1transect[,col_of_interest(csv, c)])
-      df_out[,paste0(c)] <- vals
+    classes <- lapply(csv, class) #%in% cols_to_keep
+
+    for (ckeep in cols_to_keep){
+      # ckeep<- cols_to_keep[3]
+      # print(ckeep)
+      classToUse <- paste(classes[ckeep], collapse = ',')
+      
+      vals = test1transect[,col_of_interest(csv, ckeep)]
+      class(vals) <- classToUse
+      df_out[,paste0(ckeep)] <- vals
     }
     
     # also store the transect coordinates
-    df_out$trans_x0 <- as.numeric(begin_coords$lon)
-    df_out$trans_y0 <- as.numeric(begin_coords$lat)
-    df_out$trans_x1 <- as.numeric(end_coords$lon)
-    df_out$trans_y1 <- as.numeric(end_coords$lat)
+    # is this necessary??
+    # df_out$trans_x0 <- as.numeric(begin_coords$lon)
+    # df_out$trans_y0 <- as.numeric(begin_coords$lat)
+    # df_out$trans_x1 <- as.numeric(end_coords$lon)
+    # df_out$trans_y1 <- as.numeric(end_coords$lat)
+    # 
+    # calculate bearing of transect
+    bearingTrans <- bearing(SpatialPoints(data.frame(x = df_out$originX, y = df_out$originY),
+                          CRS("+proj=longlat +datum=WGS84")),
+            SpatialPoints(data.frame(x = df_out$endX, y = df_out$endY),
+                          CRS("+proj=longlat +datum=WGS84")))
+    
+    # navigational bearing scale(north= 0 & 360)
+    bearing_in_compas_scale <- (bearingTrans + 360) %% 360
+    
+    df_out$bearing <- bearing_in_compas_scale
     
     
     allPoints <- rbind(allPoints, df_out)
@@ -267,11 +284,11 @@ build_csvLines <- function(csv){
     } else {
       
       
-      begin_coords <- data.frame(lon = as.numeric(test1transect$trans_x0[1]),
-                                 lat = as.numeric(test1transect$trans_y0[1]))
+      begin_coords <- data.frame(lon = as.numeric(test1transect$originX[1]),
+                                 lat = as.numeric(test1transect$originY[1]))
       
-      end_coords <- data.frame(lon = as.numeric(test1transect$trans_x1[1]),
-                               lat = as.numeric(test1transect$trans_y1[1]))  
+      end_coords <- data.frame(lon = as.numeric(test1transect$endX[1]),
+                               lat = as.numeric(test1transect$endY[1]))  
       x <- as.matrix(rbind(begin_coords, end_coords))
       
       # at the correct location in df_coastDist append the coastline distance 
@@ -304,9 +321,9 @@ build_csvLines <- function(csv){
 # outlier detection: rosnerTest
 # remove outliers based on a interval of 1 -3 years?
 # alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
-rosner <- function(x, minStd){
+rosner <- function(x, minStd, minObsNeeded){
   # x <- testPos$coastDist
-  # x <- subsets2$coastDist
+  # x <- subsets3$coastDist
   # x <- combined$axisDist
   
   # minStd <- 100
@@ -314,17 +331,19 @@ rosner <- function(x, minStd){
   # assume no outliers (assign value 1)
   output <- rep(1,length.out=length(x))
   
-  # only aply when there is 5 observations
-  if(length(x) > 5){
-    
-    K <- length(x)-2
-    if(K > 10){
+  # only apply Rosner when there is 5 observations
+  if(length(x) > minObsNeeded){
+  
+  # the amount of observations that are not from the same distribution
+    # (alsternative hypothesis in Rosner Test)
+  K <- length(x)-2 
+  if(K > 10){ # never bigger than 10
       K <- 10
     } 
     
-  if(K > floor(length(x)/2)){
+  if(K > floor(length(x)/2)){ # never bigger than 1/2 size of observations
     K <- floor(length(x)/2)
-  }
+    }
     
     # skip_to_next <- FALSE
     # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
@@ -333,7 +352,8 @@ rosner <- function(x, minStd){
   # throws an error when no outliers are detected... (all values are equal)
   
   if(!test2){ # if no error:
-      rosnerOut <- rosnerTest(x, K, warn = F)[['all.stats']]
+      rosnerOut <- rosnerTest(x, K,alpha = 0.01, warn = F)[['all.stats']]
+      test <- grubbs.test(x)
       # outliers:
       outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
       
@@ -341,22 +361,7 @@ rosner <- function(x, minStd){
       
       
     } 
-    
-  #   tryCatch(output[rosnerTest(x, K, warn = F)[['all.stats']][['Obs.Num']]
-  #                   [which(rosnerTest(x, K, warn = F)[['all.stats']][['Outlier']])]] <- 0,
-  #            
-  #            # test <- ,
-  #            
-  #            # include that sd.i < x amount of pixels is also not an outlier?
-  #            # rosnerTest(x, K, warn = F)[['all.stats']][['SD.i']]
-  #            
-  #            
-  #            error = function(e) {skip_to_next <<- TRUE})
-  #   # test <- any(rosnerTest(x, K, warn = F)), skip_to_next <- TRUE})
-  #   
-  #   if(skip_to_next) { output <- rep(1,length.out=length(x)) } 
-  #   
-  #   
+   
   }
   
   return (output)
@@ -466,3 +471,61 @@ to_spatial_df <-  function(matrix,x_to_use,y_to_use){
   
 }
 
+
+# based on distance, lon, lat and bearing return x,y coordinates 
+get_dists2 <- function(x, lon, lat, bearing, dist){
+  
+  # x original sf data.frame 
+  # lon, lat are coordinates of origin points
+  # bearing, pre-calculated bearing/direction of the transect
+  # dist of interest that needs to be translated in coordinates
+  
+  # dist <- c('axisDistAbs', 'axisDistSlope')
+  # x <- mudbanks
+  # bearing <- x$bearing
+  # lon <- x$originX
+  # lat <- x$originY
+  # 
+  dat <- tibble(lon, lat)
+  names(dat) <- c('lon', 'lat')
+  
+  out <- data.frame(matrix(NA, nrow = nrow(x)))
+  
+  for (i in 1:length(dist)){
+    # i<-1
+    
+    pattern <- dist[i]
+    coords_out <- data.frame(destPoint(dat,  bearing, x[[paste0(pattern)]]))
+    
+    negDist <- which( x[[paste0(pattern)]] == -1)
+    
+    
+    out[[paste0(pattern, 'X', collapse = '')]] <- coords_out[,1]
+    out[[paste0(pattern, 'Y', collapse = '')]] <- coords_out[,2]
+    
+    # set the coordinates which have no dist measured at -1
+    out[negDist,paste0(pattern, 'X', collapse = '')] <- -1
+    out[negDist,paste0(pattern, 'Y', collapse = '')] <- -1
+    
+    # 
+    # out <- cbind(out, coords_out[[paste0(pattern, 'X', collapse = '')]],
+    #              coords_out[[paste0(pattern, 'Y', collapse = '')]])
+    
+    # colnames(out) <- c(paste0(pattern, 'X', collapse = ''), paste0(pattern, 'Y', collapse = ''))
+  }
+  
+  # drop NA col
+  out <- out[,-1]
+  
+  
+  x <- cbind(data.frame(x), out)
+  
+  # make it spatial
+  SpatialPoints <- SpatialPointsDataFrame(data.frame(x[,'x'], x[,'y'] ),
+                                          data = x,
+                                          proj4string=CRS("+proj=longlat +datum=WGS84"))
+  points_sf <- st_as_sf(SpatialPoints)
+  
+  
+  return(points_sf)
+}
