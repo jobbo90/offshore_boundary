@@ -529,3 +529,21 @@ get_dists2 <- function(x, lon, lat, bearing, dist){
   
   return(points_sf)
 }
+
+sp_pnt_ee <- function(x,y,name,col){
+  spt <- sf_as_ee(st_set_crs( # make it spatial with a crs and transfer to ee_obj
+    st_sfc(st_multipoint(cbind(x,y))),4326 ))
+  
+  
+  ee_addlayer <- Map$addLayer(
+    eeObject = spt,
+    name = paste0(name),
+    visParams = list(
+      pointRadius = 10,
+      color = col
+    )
+  )
+}
+
+
+
