@@ -527,6 +527,8 @@ mudbanks <- get_dists2(mudbanks, mudbanks$originX, mudbanks$originY,
                                   c('axisDistAbs', 'axisDistSlope', 'maxExtent'))
 
 
+mudbanks$SmoothedSlopes <- (mudbanks$SmoothedPeakFract - mudbanks$maxExtentIndex) / 
+  (mudbanks$SmoothedPeak -  mudbanks$maxExtent) * 10000
 
 # # make it spatial
 # SpatialPoints <- SpatialPointsDataFrame(data.frame(x= test_get$axisDistAbsX, y = test_get$axisDistAbsY),
@@ -611,7 +613,7 @@ for (i in uniqueDates){
   # points(positions_all, distance_all_abs,  col = 'red')
   # lines(positions_all, predicted.intervals[,1],col='green',lwd=3)
   # points(positions_all[outlier_ind],distances_all[outlier_ind], col = 'red')
-  # points(positions_all, mudbanks_selection$axisDistAbs, col = 'blue')
+  # # points(positions_all, mudbanks_selection$axisDistAbs, col = 'blue')
   # points(positions_all, mudbanks_selection$axisDistSlope, col = 'red')
   
   
@@ -620,10 +622,67 @@ for (i in uniqueDates){
   #' peak height and distance and same for extent height and distance
   #' these values are smoothed and therefore relatively stable
   #' 
+  #' So assuming the fraction values corresponding to maxExtent and SuperSmoothed peak are
+  #' representative increase between them or relative flat decrease in fraction
+  #' represents no mudbank scenario
   #' 
+  #' risks:
+  #' part of the transect over land, the shorter the less likely the SuperSmoothed peak is correct
+  #' the longer, less likely the drop comming after the super smoothed peak is representing mudbank boundary
   
-  #
-  # Make distances compatible with rgee for plotting
+
+  # calculate slope between supersmoothed peak and max Extent
+  # you'd expect a negative slope value for the fraction
+
+  slopes <- mudbanks_selection$SmoothedSlopes
+
+  hist(slopes,  xlim=c(floor(min(slopes)), ceiling(max(slopes))),
+       breaks =c(seq(floor(min(slopes)),ceiling(max(slopes)),0.01)))
+
+  # Value should be in the range of -0.15 and 0 ==> not sure yet if using median is the best way
+  median_slope <- median(slopes)
+  indicesSlopes <- which(slopes > -0.15) # indices of the subset
+  
+  pos_slopes <- sp_pnt_ee(mudbanks_selection[indicesSlopes, ]$axisDistAbsX, # &  mudbanks_selection$SmoothedPeak > 0
+                          mudbanks_selection[indicesSlopes, ]$axisDistAbsY, 
+                        'positive_slopes',
+                        "#3182bd")
+
+  # mudbanks_selection[which(slopes > median_slope)
+  
+  # Give mudbank_outlier +1 in the source file to keep track
+  mudbanks[which(mudbanks$DATE_ACQUIRED == i & 
+                   mudbanks$pos %in% positions_all[indicesSlopes]), "mudbank_outlier"] <-
+    as.data.frame(mudbanks[
+      which(mudbanks$DATE_ACQUIRED == i & 
+              mudbanks$pos %in% positions_all[indicesSlopes]),"mudbank_outlier"])[,1] + 1
+  
+
+  #' Very similar to the slope, also the smoothed peak fraction could in theory be used to
+  #' indicate no-mudbank cases: very low values can be a sign of NO mudbank
+  #' 
+
+  # hist(mudbanks_selection$SmoothedPeakFract,
+  #      breaks =c(seq(min( mudbanks_selection$SmoothedPeakFract),
+  #                    ceiling(max(mudbanks_selection$SmoothedPeakFract))+0.1,0.01)))
+
+  threshold <- median(mudbanks_selection$SmoothedPeakFract) - sd(mudbanks_selection$SmoothedPeakFract)
+  
+  
+  # lowPeakFractsSmoothed<- mudbanks_selection[which(mudbanks_selection$SmoothedPeakFract < 0.1),]
+  # highPeakDist <- mudbanks_selection[which(mudbanks_selection$SmoothedPeak > 7500), ]
+  lowPeakOutlier <-  which(mudbanks_selection$SmoothedPeakFract < threshold) #& mudbanks_selection$SmoothedPeakFract > 0
+  noMudBankTest <- mudbanks_selection[lowPeakOutlier , ] # 0 is an artefact of GEE export in the super smoothed peaks?
+
+  noBankSp <- sp_pnt_ee(noMudBankTest$x,
+                        noMudBankTest$y, 
+                        'noBankSp_rel',
+                        "#e0f3db")
+  
+  # again update mudbank Selection
+  mudbanks_selection <- mudbanks_selection[-unique(c(indicesSlopes,lowPeakOutlier)), ]
+  
+  # Make distances compatible (get x,y) with rgee for plotting
   SpatialPointsAbs <- sp_pnt_ee(mudbanks_selection$axisDistAbsX,
                                 mudbanks_selection$axisDistAbsY, 'abs_drop',
                                 "FF0000")
@@ -634,52 +693,8 @@ for (i in uniqueDates){
                                 mudbanks_selection$y, 'rel_drop',
                                 "#d95f0e")
   
-  
-  # you'd expect a negative slope value for the fraction
-  # allthough sometimes the slope can be positive and still relevant.
-  slopes <- (mudbanks_selection$SmoothedPeakFract - mudbanks_selection$maxExtentIndex) / 
-    (mudbanks_selection$SmoothedPeak -  mudbanks_selection$maxExtent) * 10000
-  
-  hist(slopes,  xlim=c(floor(min(slopes)), ceiling(max(slopes))), 
-       breaks =c(seq(floor(min(slopes)),ceiling(max(slopes)),0.1)))
-  
-  median_slope <- mean(slopes) + var(slopes)
-  
-  pos_slopes <- sp_pnt_ee(mudbanks_selection[which(slopes > -0.15 & 
-                    mudbanks_selection$SmoothedPeak > 0), ]$x,
-                          mudbanks_selection[which(slopes > -0.15 & 
-                    mudbanks_selection$SmoothedPeak > 0), ]$y, 
-                        'positive_slopes',
-                        "#3182bd")
-  # flat_slopes <- sp_pnt_ee(mudbanks_selection[which(slopes > -0.1), ]$x,
-  #                          mudbanks_selection[which(slopes > -0.1), ]$y, 
-  #                          'flat_slopes',
-  #                          "#9ecae1")
-  
-  hist(mudbanks_selection$SmoothedPeak, 
-       breaks =c(seq(min( mudbanks_selection$SmoothedPeak),
-                     ceiling(max(mudbanks_selection$SmoothedPeak))+100,100)))
-  
-  hist(mudbanks_selection$SmoothedPeakFract, 
-       breaks =c(seq(min( mudbanks_selection$SmoothedPeakFract),
-                     ceiling(max(mudbanks_selection$SmoothedPeakFract))+0.1,0.01)))
-  
-  
-  threshold <- median(mudbanks_selection$SmoothedPeakFract) - sd(mudbanks_selection$SmoothedPeakFract)
+  first + SpatialPointsRel + SpatialPointsAbs + SpatialPointsSlope + pos_slopes + noBankSp
 
-  # threshold <- quantile(slopes, .9)#median(slopes) 
-  plot(mudbanks_selection$SmoothedPeakFract, mudbanks_selection$SmoothedPeak)
-  points(noMudBankTest$SmoothedPeakFract, noMudBankTest$SmoothedPeak, col = 'red')
-  noMudBankTest <- mudbanks_selection[which(mudbanks_selection$SmoothedPeakFract < threshold &
-                                              mudbanks_selection$SmoothedPeakFract > 0 ), ] # 0 is an artefact of clouds in the super smoothed peaks?
-  
-  
-  noBankSp <- sp_pnt_ee(noMudBankTest$x,
-                        noMudBankTest$y, 
-                        'noBankSp_rel',
-                        "#e0f3db")
-  
-  first + SpatialPointsRel + pos_slopes + noBankSp
 
   ########
   #' after defining no mudbank transects, try to determine applicability of:
@@ -687,40 +702,25 @@ for (i in uniqueDates){
   #' largest absolute drop boundary
   #' largest slope drop boundary
   #' 
-  
-  # plot histogram - fraction smoothed peak
-  hist(mudbanks_selection$SmoothedPeakFract,
-       xlim=c(0,1), breaks =c(seq(0,1,0.01)))
-  
-  # histogram - distance smoothed peak
-  hist(mudbanks_selection$SmoothedPeak,
-       xlim=c(0,20000), breaks =c(seq(0,20000,100)))
-  
-  # fraction of detected offshore boundary
-  hist(mudbanks_selection$mudFractAbs,
-       xlim=c(0,1), breaks =c(seq(0,1,0.05)))
-  
-  hist(mudbanks_selection$mudFract,
-       xlim=c(0,1), breaks =c(seq(0,1,0.05)))
-  
-  hist(mudbanks_selection$mudFractSlope,
-       xlim=c(0,1), breaks =c(seq(0,1,0.05)))
-  
-  # distance of detected offshore boundary (abs)
-  hist(mudbanks_selection$axisDistAbs,
-       xlim=c(0,20000), breaks =c(seq(0,30000,100)))
-  
-  plot(mudbanks_selection$axisDistAbs,
-       mudbanks_selection$mudFractAbs)
-  
-  # refine thresholds?
-  lowPeakFractsSmoothed<- mudbanks_selection[which(mudbanks_selection$SmoothedPeakFract < 0.1),]
-  
-  
-  highPeakDist <- mudbanks_selection[which(mudbanks_selection$SmoothedPeak > 7500), ]
-  highPeakfrac <- mudbanks_selection[which(mudbanks_selection$mudFractAbs > 0.95),]
-  lowPeakFractsRel <- mudbanks_selection[which(mudbanks_selection$mudFract < 0.1),]
-  
+  #' 
+
+  # # fraction of detected offshore boundary
+  # hist(mudbanks_selection$mudFractAbs,
+  #      xlim=c(0,1), breaks =c(seq(0,1,0.05)))
+  # 
+  # hist(mudbanks_selection$mudFract,
+  #      xlim=c(0,1), breaks =c(seq(0,1,0.05)))
+  # 
+  # hist(mudbanks_selection$mudFractSlope,
+  #      xlim=c(0,1), breaks =c(seq(0,1,0.05)))
+  # 
+  # # distance of detected offshore boundary (abs)
+  # hist(mudbanks_selection$axisDistAbs,
+  #      xlim=c(0,20000), breaks =c(seq(0,30000,100)))
+  # 
+  # plot(mudbanks_selection$axisDistAbs,
+  #      mudbanks_selection$mudFractAbs)
+
   # contrasting fractions for abs drop / re drop
   contrastingFractAbs <- mudbanks_selection[which(mudbanks_selection$mudFractAbs > 0.4 &
                                                     mudbanks_selection$mudFract < 0.6 &
@@ -734,6 +734,8 @@ for (i in uniqueDates){
   
   # contrasting distances for abs drop / rel drop
   # shows nicely which RELATIVE distances are wrong! (if tresholds can be finetuned)
+  # Allthough this throuws ouy far awway points +=> methodology already has a bias on nearshore observations being detected
+  # ncie thing about relative drops are that they are in general further away
   axisDist_boundary <- median(mudbanks_selection$axisDist) + sd(mudbanks_selection$axisDist)
   axisDist_boundary_abs <- median(mudbanks_selection$axisDistAbs) - sd(mudbanks_selection$axisDistAbs)
   
@@ -751,7 +753,7 @@ for (i in uniqueDates){
          contrastingDist$axisDistAbs,
          col = 'red')
   abline(v=as.numeric(axisDist_boundary))
-  abline(h=as.numeric(axisDist_boundary_abs))
+  # abline(h=as.numeric(axisDist_boundary_abs))
   
   contrastingD <- sp_pnt_ee(contrastingDist$x,
                             contrastingDist$y, 
@@ -761,124 +763,31 @@ for (i in uniqueDates){
   first + SpatialPointsRel + contrastingD
   
   
-
-  fract_boundary_slope <- median(mudbanks_selection$mudFractSlope) + sd(mudbanks_selection$mudFractSlope)
+  # trying something similar  for other combinations of slopes/distances
+  # Doesn't seem to be helping a lot...
+  
+  # fract_boundary_slope <- median(mudbanks_selection$mudFractSlope) + sd(mudbanks_selection$mudFractSlope)
   # axisDist_boundary_abs <- median(mudbanks_selection$axisDistAbs) - sd(mudbanks_selection$axisDistAbs)
   
-  contrastingFract <- mudbanks_selection[which(mudbanks_selection$mudFractSlope > fract_boundary_slope &
-                                                 # mudbanks_selection$axisDistAbs < 14000 &
-                                                 mudbanks_selection$mudFractSlope != mudbanks_selection$mudFract), ]
-  plot(mudbanks_selection$mudFract, mudbanks_selection$mudFractSlope)
-  points(contrastingFract$mudFract,
-         contrastingFract$mudFractSlope,
-         col = 'red')
   
-  contrastingFract_sp <- sp_pnt_ee(contrastingFract$axisDistSlopeX,
-                                   contrastingFract$axisDistSlopeY, 
-                                   'contrasting_fract_slope_rel',
-                                   "#e0f3db")
-  first + SpatialPointsSlope + SpatialPointsAbs + SpatialPointsRel
-  
-  
-  
-  
-  
-  indicesToDrop <- NULL
-  for (pnt in 1:nrow(mudbanks_selection)){
-    # pos_of_interst <- 224000 #81000
-    # selected_point <-mudbanks_selection[which(mudbanks_selection$pos == pos_of_interst),]
-    # pnt <- 55
-    
-    selected_point <-mudbanks_selection[pnt,]
-    
-    # # plot all info per point available
-    # plot(c(selected_point$axisDist, selected_point$axisDistAbs, selected_point$axisDistSlope),
-    #      c(selected_point$mudFract, selected_point$mudFractAbs, selected_point$mudFractSlope),
-    #      main = paste0(selected_point$pos), xlab = 'distance', ylab = 'fraction',
-    #      ylim=c(0, 1),
-    #      xlim=c(0,selected_point$maxExtent + 1000))
-    # points(selected_point$SmoothedPeak, selected_point$SmoothedPeakFract, col = 'green' )
-    # points(selected_point$maxExtent, selected_point$maxExtentIndex, col = 'red')
-    # abline(selected_point$meanMud, 0)
-    # abline(v=as.numeric(selected_point$coastDist))
-  
+  # contrastingFract <- mudbanks_selection[which(mudbanks_selection$mudFractSlope > fract_boundary_slope &
+  #                                                # mudbanks_selection$axisDistAbs < 14000 &
+  #                                                mudbanks_selection$mudFractSlope != mudbanks_selection$mudFract), ]
+  # plot(mudbanks_selection$mudFract, mudbanks_selection$mudFractSlope)
+  # points(contrastingFract$mudFract,
+  #        contrastingFract$mudFractSlope,
+  #        col = 'red')
+  # 
+  # contrastingFract_sp <- sp_pnt_ee(contrastingFract$axisDistSlopeX,
+  #                                  contrastingFract$axisDistSlopeY, 
+  #                                  'contrasting_fract_slope_rel',
+  #                                  "#e0f3db")
+  # first + SpatialPointsSlope + SpatialPointsAbs 
 
-    # if slope between smoothed peak & maxExtent is low
-    # test if can be used to filter out mudbank obs. e.g. height, distance and slope between points
-    slope <- (selected_point$SmoothedPeakFract - selected_point$maxExtentIndex) / 
-      (selected_point$SmoothedPeak -  selected_point$maxExtent)
-    
-    if(slope>0){
-      # mudbanks_selection<-mudbanks_selection[-pnt,]
-      indicesToDrop <- rbind(indicesToDrop,selected_point)
-    }
-    
-    # each transect now contains 3x distances: rel, abs and slope drops
-    # Is it possible to define some rules on these 3 points? E.g. define the potential of an outlier based on some tests?
-    # e.g. if same pos = no outlier
-    # if fraction < mean value add + 1 for outlier?
-    # 
-    
-    
-    
-    
-  }
-  
-  Outliers_test <- sp_pnt_ee(indicesToDrop$axisDistAbsX,
-                             indicesToDrop$axisDistAbsY, 'abs_drop_outlier',
-                                 "#ffeda0")
-  
-  outlierslowPeakFractsSmoothed <- sp_pnt_ee(lowPeakFractsSmoothed$axisDistAbsX,
-                                   lowPeakFractsSmoothed$axisDistAbsY, 'low_fract_smoothed',
-                                "#756bb1")
-  outliersLowFractRel <- sp_pnt_ee(lowPeakFractsRel$x,
-                                   lowPeakFractsRel$y, 'low_fract_outlier_rel',
-                                "#e0f3db")
 
   
-  outliersHighDist <- sp_pnt_ee(highPeakDist$axisDistAbsX,
-                                highPeakDist$axisDistAbsY, 'high_dist_outlier',
-                                "#fb9a99")
-  outliersHighfrac<- sp_pnt_ee(highPeakfrac$axisDistAbsX,
-                                highPeakfrac$axisDistAbsY, 'high_fract_outlier',
-                                "#ff7f00")
-
+  
  
-  
-  first + SpatialPointsAbs + SpatialPointsSlope + 
-    outliersHighDist + outliersHighfrac + outliersLowFractRel
-  
-  
-  # mapview option
-  # absdrop <- to_spatial_df(mudbanks_selection, 
-  #               'axisDistAbsX', 'axisDistAbsY')
-  # 
-  # reldrop <- to_spatial_df(mudbanks_selection, 
-  #                       'x', 'y')
-  
-  # 
-  # mapview(x = reldrop, map = first)
-  # mapview(x = absdrop, map = first)
-  
-  
-  # try to test the following logic, test for each transect the possibility of no-mudbank / outlier
-  # because each transect has multiple positions that seem likely (allthough abs drop seems to be better)
-  # test based on different characteristics, and use all positions of accepted transect for the density function
-  # abs drop is more consistent, yet to close to the shoreline often. Relative drop is to scattered in the offshore parts.
-  
-  # it remains challenging to detect no mudbanks so far on individual images. 
-  
-  
-  
-
-  
-  # mapview(stp1,first, col.regions = c("green"), layer.name = 'mudbanks' ) 
-    # mapview(stp1,first, col.regions = c("green"), layer.name = 'mudbanks2' )
-    # mapview(outlier_selection,first, col.regions =c('orange'), layer.name = 'outliers') +
-    # mapview(sp_axisDistAbs,first, col.regions =c('blue'), layer.name = 'absDist') +
-    # mapview(sp_axisDistSlope,first, col.regions =c('red'), layer.name = 'lopeDist')
-
-  
   # test outlier detection for fractions
   # plot(mudbanks_selection$axisDist, mudbanks_selection$mudFract)
   # population.cov <- cov(mudbanks_selection$axisDist, mudbanks_selection$mudFract)
@@ -1031,6 +940,8 @@ for (i in uniqueDates){
   # #        pch=19,col="red")
   # # 
   # # plot(part.corr)
+  
+  
   
   for (pnt in 1:nrow(mudbanks_selection)){
     # pos_of_interst <- 224000 #81000
