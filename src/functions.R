@@ -353,7 +353,7 @@ rosner <- function(x, minStd, minObsNeeded){
   
   if(!test2){ # if no error:
       rosnerOut <- rosnerTest(x, K,alpha = 0.01, warn = F)[['all.stats']]
-      test <- grubbs.test(x)
+      # test <- grubbs.test(x)
       # outliers:
       outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
       
@@ -545,5 +545,11 @@ sp_pnt_ee <- function(x,y,name,col){
   )
 }
 
+
+# https://stackoverflow.com/questions/29255473/most-frequent-value-mode-by-group
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
 
 

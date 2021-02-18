@@ -91,6 +91,7 @@ for (q in seq_along(years)) {
 }
 # filtered <- unique(filtered)[1:2,]
 
+# bind_rows!!!
 allFiles <- do.call(rbind, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
                                                                                 )))

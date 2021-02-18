@@ -2,6 +2,7 @@ library(rgee)
 library(ggplot2)
 library(readr)
 library(mapview)
+library(leaflet)
 library(tidyverse)
 library(dplyr)      # for mutate, such as adding cols
 library(stringr)
