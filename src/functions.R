@@ -524,7 +524,7 @@ get_dists2 <- function(x, lon, lat, bearing, dist){
   SpatialPoints <- SpatialPointsDataFrame(data.frame(x[,'x'], x[,'y'] ),
                                           data = x,
                                           proj4string=CRS("+proj=longlat +datum=WGS84"))
-  points_sf <- st_as_sf(SpatialPoints)
+  points_sf <- suppressWarnings(st_as_sf(SpatialPoints))
   
   
   return(points_sf)

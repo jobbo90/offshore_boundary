@@ -4,6 +4,7 @@ library(readr)
 library(mapview)
 library(leaflet)
 library(tidyverse)
+library(plyr)
 library(dplyr)      # for mutate, such as adding cols
 library(stringr)
 library(sp)
@@ -31,7 +32,7 @@ library(RStoolbox) # for ggRGB
 # library(maptools) # elide spatial line (rotate)
 # library(patchwork)
 
-# library(plyr)
+
 # library(egg) # for tagging facets
 # library( rasterVis ) # for gPlot
 # library( gridExtra )
