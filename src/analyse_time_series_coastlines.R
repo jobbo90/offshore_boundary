@@ -38,7 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
-Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
+# Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -46,8 +46,13 @@ source("./src/functions.R")
 
 ## ---------------------------
 
-mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
+# mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/processed'
+
+mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
+leaflet() %>%
+  addProviderTiles("Esri.WorldImagery")
+
 years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 

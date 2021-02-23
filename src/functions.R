@@ -331,33 +331,33 @@ rosner <- function(x, minStd, minObsNeeded){
   # assume no outliers (assign value 1)
   output <- rep(1,length.out=length(x))
   
-  # only apply Rosner when there is 5 observations
-  if(length(x) > minObsNeeded){
+  # only apply Rosner when there is sufficient observations
+  if(length(x) >= minObsNeeded){
   
-  # the amount of observations that are not from the same distribution
+    # the amount of observations that are not from the same distribution
     # (alsternative hypothesis in Rosner Test)
-  K <- length(x)-2 
-  if(K > 10){ # never bigger than 10
-      K <- 10
-    } 
-    
-  if(K > floor(length(x)/2)){ # never bigger than 1/2 size of observations
-    K <- floor(length(x)/2)
-    }
-    
-    # skip_to_next <- FALSE
-    # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
-    
-  test2 <- has_error(rosnerTest(x, K, warn = F), silent = !interactive())
-  # throws an error when no outliers are detected... (all values are equal)
-  
-  if(!test2){ # if no error:
-      rosnerOut <- rosnerTest(x, K,alpha = 0.01, warn = F)[['all.stats']]
-      # test <- grubbs.test(x)
-      # outliers:
-      outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
+    K <- length(x)-2 
+    if(K > 10){ # never bigger than 10
+        K <- 10
+      } 
       
-      output[outliers[!is.na(outliers)]] <- 0
+    if(K > floor(length(x)/2)){ # never bigger than 1/2 size of observations
+      K <- floor(length(x)/2)
+      }
+      
+      # skip_to_next <- FALSE
+      # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
+      
+    test2 <- has_error(rosnerTest(x, K, warn = F), silent = !interactive())
+    # throws an error when no outliers are detected... (all values are equal)
+    
+    if(!test2){ # if no error:
+        rosnerOut <- rosnerTest(x, K,alpha = 0.01, warn = F)[['all.stats']]
+        # test <- grubbs.test(x)
+        # outliers:
+        outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
+        
+        output[outliers[!is.na(outliers)]] <- 0
       
       
     } 
