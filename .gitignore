@@ -100,5 +100,10 @@ target/
 /data/temp
 /data/processed
 /data/raw
+/results/temp_maps
+/results
+/data/processed/validation/WegNaarZee
+/data/processed/validation/Braamspunt
+
 
 .Rproj.user
