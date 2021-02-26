@@ -406,7 +406,7 @@ mudbanks$locf <- mudbanks$coastDist
 indices <- unique(which(is.na(mudbanks$coastDist) | mudbanks$coast_outlier == 0))
 
 for(ind in indices){
-  # ind<-indices[1200]
+  # ind<-indices[2]
   
   data_entry <- mudbanks[ind, ]
   
@@ -429,8 +429,12 @@ for(ind in indices){
     nearest <- pos_subset[minInd,]
     
     # fill locf in original data frame
-    mudbanks[row.names(mudbanks) == row.names(data_entry), 'locf'] <- 
-      nearest$coastDist 
+    # 
+    # mudbanks %>%
+    #   mutate(locf = if_else(DATE_ACQUIRED == data_entry$DATE_ACQUIRED &
+    #                        pos == data_entry$pos, nearest$coastDist, -1 ))
+    mudbanks[ind, 'locf'] <- nearest$coastDist
+      # nearest$coastDist 
   }
 
 }
@@ -468,7 +472,14 @@ mudbanks <- mudbanks %>%
 
 # only now there remain some groups with median of NA (because there was only 0 or 1 observations in that group)
 # which is a problem for the next step
-# so fill NA with median of LOCF columns
+# so fill NA with Mode of LOCF columns
+mudbanks <- mudbanks %>%
+  group_by(key) %>%
+  mutate(coast_median = replace_na(coast_median, Mode(locf))) %>%
+  ungroup()
+
+
+
 
 #'
 #'  calculate for each pos, each year gain/loss compared to previous year
@@ -525,7 +536,7 @@ if(exportCoasts){
 
 # 
 # # test simple 2d plot
-twoD_pos <- 95000#95000
+twoD_pos <- 77000 
 
 subset2d_for_testPlot <- subset(mudbanks, pos == twoD_pos)
 
