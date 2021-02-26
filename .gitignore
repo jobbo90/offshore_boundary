@@ -104,6 +104,6 @@ target/
 /results
 /data/processed/validation/WegNaarZee
 /data/processed/validation/Braamspunt
-
+.Rhistory
 
 .Rproj.user
