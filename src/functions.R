@@ -322,11 +322,11 @@ build_csvLines <- function(csv){
 # remove outliers based on a interval of 1 -3 years?
 # alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
 rosner <- function(x, minStd, minObsNeeded){
-  # x <- testPos$coastDist
   # x <- subsets3$coastDist
-  # x <- combined$axisDist
   
-  # minStd <- 100
+  
+  # minStd <- 25
+  # minObsNeeded <- 10
   
   # assume no outliers (assign value 1)
   output <- rep(1,length.out=length(x))
@@ -337,18 +337,16 @@ rosner <- function(x, minStd, minObsNeeded){
     # the amount of observations that are not from the same distribution
     # (alsternative hypothesis in Rosner Test)
     K <- length(x)-2 
-    if(K > 10){ # never bigger than 10
-        K <- 10
-      } 
+    # if(K > 10){ # never bigger than 10???
+        # K <- 10
+      # } 
       
     if(K > floor(length(x)/2)){ # never bigger than 1/2 size of observations
-      K <- floor(length(x)/2)
+      K <- 7#floor(length(x)/2)
       }
-      
-      # skip_to_next <- FALSE
-      # Rtest$all.stats$Obs.Num[which(Rtest$all.stats$Outlier)]
-      
-    test2 <- has_error(rosnerTest(x, K, warn = F), silent = !interactive())
+    
+    # a warning is issued when the assumed Type 1 error may not be correct
+    test2 <- has_error(rosnerTest(x, K,alpha = 0.01 ,warn = F), silent = !interactive())
     # throws an error when no outliers are detected... (all values are equal)
     
     if(!test2){ # if no error:
@@ -363,6 +361,44 @@ rosner <- function(x, minStd, minObsNeeded){
     } 
    
   }
+  
+  # assumption that with smaller sample sizes there is max 1 outlier.
+  if(length(x) < minObsNeeded &
+     length(x) >= 3){
+    
+    # fix K at 1
+    K <- 1
+    test2 <- has_error(rosnerTest(x, K, warn = F), silent = !interactive())
+    # throws an error when no outliers are detected... (all values are equal)
+    
+    if(!test2){ # if no error:
+      rosnerOut <- rosnerTest(x, K,alpha = 0.01, warn = F)[['all.stats']]
+      # test <- grubbs.test(x)
+      # outliers:
+      outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
+      
+      output[outliers[!is.na(outliers)]] <- 0
+      
+      
+    } 
+    
+    
+  }
+  
+  # Based on a study using N=1,000 simulations, Rosner's (1983) Table 1 shows the 
+  # estimated true Type I error of declaring at least one outlier when none exists 
+  # for various sample sizes n ranging from 10 to 100, and the declared maximum 
+  # number of outliers k ranging from 1 to 10. Based on that table, Roser (1983)
+  # declared that for an assumed Type I error level of 0.05, as long as n ≥ 25, 
+  # the estimated α levels are quite close to 0.05, and that similar results were 
+  # obtained assuming a Type I error level of 0.01. However, the table below is an 
+  # expanded version of Rosner's (1983) Table 1 and shows results based on N=10,000
+  # simulations. You can see that for an assumed Type I error of 0.05, the test
+  # maintains the Type I error fairly well for sample sizes as small as n = 3 as
+  # long as k = 1, and for n ≥ 15, as long as k ≤ 2. Also, for an assumed Type I 
+  # error of 0.01, the test maintains the Type I error fairly well for sample sizes 
+  # as small as n = 15 as long as k ≤ 7.
+  # 
   
   return (output)
 }

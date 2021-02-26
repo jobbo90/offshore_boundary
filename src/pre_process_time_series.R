@@ -46,7 +46,7 @@ source("./src/functions.R")
 ## ---------------------------
 
 # seq1 <- seq(1985, 1999, 1)
-seq2 <- seq(2015, 2020, 1)
+seq2 <- seq(1985, 2020, 1)
 # seq3 <- seq(2002, 2002, 1)
 
 years <- c(seq2)# seq(from = 1985, to = 2020, by = 1)
@@ -74,7 +74,7 @@ df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee
-path_rows <- c('229_56')
+path_rows <- c('228_56', '229_56','230_56')
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
@@ -107,8 +107,12 @@ uniqueDates <- unique(allFiles[,col_of_interest(allFiles, 'DATE_ACQUIRED$')]);
 drop <- c('system.index', '.geo')
 keep_columns <- colnames(allFiles)[!(colnames(allFiles) %in% drop)]
 
+# some years haven't been run with correct GEE scripts; see which dates
+# testNA <- unique(allFiles$DATE_ACQUIRED[is.na(allFiles$axisDistAbs)])
+# testNA2 <- allFiles[is.na(allFiles$axisDistAbs), ]
+
 # prep input to sf data.frame class
-mudbanks <- reshape_csvPoints(allFiles, 'coastX', 'coastY', keep_columns) # 'peakCoordX', 'peakCoordY'
+mudbanks <- reshape_csvPoints(allFiles, 'coastX', 'coastY', keep_columns)
 # coastX / coastY
 # change all -1 to NA
 # these are the transect that resulted in no coastline estimate
@@ -127,7 +131,6 @@ mudbanks <- mudbanks %>%
                                 "5 year"))) %>%
   mutate(year_col = as.Date(cut(lubridate::date(mudbanks$DATE_ACQUIRED),
                                 "1 year"))) 
-
 
 group_dates<-unique(mudbanks$year_col)        # yearly
 group_pos <- unique(mudbanks$pos)             # All unique positions (transect number)
@@ -158,13 +161,14 @@ vizParams = list(
 
 #'
 #'  estimate coastal outliers with rosner test
-#'  - for each transect per 3 years to ensure sufficient observations
+#'  - for each transect per 3/5 years to ensure sufficient observations
+#'  - Still needs an improvement on the outlier detection with Rosner test. 
+#'  Because the distribution is not normal Rosner might not be applicable for outlier detection.
+#'  Also the K value (potential nr. of outliers) is not yet optimal implemented, 
+#'  ideally you'd want to apply it to consistent group sizes (15 - 25) where the K
+#'  is somehow determined on the distribution (and not the amount of observartions.)
 #'  
-#'  Still poses problems for some transects
-#'  Resulting in negative mudbank distances, especially at transects 
-#'  near river mouths. 
-#'  Also test for years with low obs?! 1985 - 2000
-
+#'  
 
 # assume nothing is outlier and set outputs to NA
 mudbanks$coast_outlier <- 1
@@ -173,14 +177,14 @@ mudbanks$coastObs      <- NA
 
 for(i in five_years){ # group_years / five_years
   
-  start <- Sys.time()
-  # i<-five_years[five_years == c("1991-01-01")]
+  
+  # i<-five_years[five_years == c("2006-01-01")]
   
   for(q in group_pos){
-    # q <- group_pos[group_pos == 116000]
-    
-    
-    indexs <- which(mudbanks$date_col == i &  # five_year_col
+    start <- Sys.time()
+    # q <- group_pos[group_pos == 142000]
+
+    indexs <- which(mudbanks$five_year_col == i &  # five_year_col
                       mudbanks$pos == q &
                       mudbanks$coastX != -1)
     
@@ -245,24 +249,33 @@ for(i in five_years){ # group_years / five_years
     mudbanks[indexs, 'coast_outlier'] <- 
         rosner(subsets3$coastDist,min_Std , min_obs_rosner)[which(subsets3_recal %in% indexs)]
     # Will throw an error/warning if all values are the same => nothing is assigned as outlier
-  
+      
 
     # plot(as.Date(subsets3$DATE_ACQUIRED), subsets3$coastDist,
-        # main = paste0(q), xlab = 'date', ylab = 'coastline position [m]')
-
+    #     main = paste0(q), xlab = 'date', ylab = 'coastline position [m]')
     # points(as.Date(subsets3$DATE_ACQUIRED)[which(rosner(subsets3$coastDist, min_Std, min_obs_rosner) == 0)],
-           # subsets3$coastDist[which(rosner(subsets3$coastDist, min_Std, min_obs_rosner) == 0)],
-           # col = 'red')
+    #        subsets3$coastDist[which(rosner(subsets3$coastDist, min_Std, min_obs_rosner) == 0)],
+    #        col = 'red')
+    # points(as.Date(subsets3$DATE_ACQUIRED)[which(subsets3$coast_outlier == 0)],
+    #        subsets3$coastDist[which(subsets3$coast_outlier == 0)],
+    #        col = 'red')
+
+    end <- Sys.time()
+    dif<- difftime(end, start, "mins")
+    
+    
+    
+    if(as.numeric(dif, units="secs") > 5){
+      print(paste0(as.Date(i), ' for pos: ', q,' in ', round(dif,1), ' in ', units(dif)))
+    }
+    
+    
  
   }
   suppressWarnings(remove(subsets3, indexs, reference_date,
                           selectedDates, nearestDate, index_nearest,
                           subsets3_recal))
-  
-  end <- Sys.time()
-  dif<- difftime(end, start, "mins")
-  print(paste0(as.Date(i) ,' in ', round(dif,1), ' in ', units(dif)))
-  
+
 }
 
 
@@ -277,9 +290,9 @@ for(i in five_years){ # group_years / five_years
 for(i in group_dates){
   start <- Sys.time()
   for(q in group_pos){
-    # i<-group_dates[group_dates == c("2017-01-01")]
+    # i<-group_dates[group_dates == c("2002-01-01")]
     # 
-    # q <- group_pos[group_pos == 16530]
+    # q <- group_pos[group_pos == 4000]
     # print(q)
     
     subsets_annual <- mudbanks[which(mudbanks$year_col == i & 
@@ -443,14 +456,19 @@ mudbanks <- mudbanks %>%
 mudbanks$coast_median[mudbanks$coast_outlier == 0] <- NA
 
 # key to indicate groups of years~pos
-mudbanks$key <- with(rle(as.numeric(mudbanks$year_col)), rep(seq_along(lengths), lengths))
+mudbanks$key <- with(rle(as.numeric(mudbanks$year_col)), 
+                     rep(seq_along(lengths), 
+                         lengths))
 
 # # fill outliers (NA) with median coastal observation of that year
 mudbanks <- mudbanks %>%
   group_by(key) %>% # group by position & year
-  mutate(coast_median = Mode(coast_median)) %>%
+  dplyr::mutate(coast_median = Mode(coast_median)) %>%
   ungroup() # remove group
-  #fill(coast_median) #%>%      # fill NA with group value ==> fill uses one down or one up and will still have NA's if next is NA
+
+# only now there remain some groups with median of NA (because there was only 0 or 1 observations in that group)
+# which is a problem for the next step
+# so fill NA with median of LOCF columns
 
 #'
 #'  calculate for each pos, each year gain/loss compared to previous year
@@ -494,11 +512,10 @@ if(exportCoasts){
     
     
     
-    write_csv(mudbanks_per_year, paste0(wd,"/data/processed/coastlines/", aoi, 
-                                        '_',path_rows, '_',
+    write_csv(mudbanks_per_year, paste0(wd,"/data/processed/coastlines/", aoi,
                                         '_', year, '_coastlines.csv'))
-    print(paste0(wd,"/data/processed/coastlines/", aoi, '_',path_rows, '_',
-                 '_', year, '_coastlines.csv'))
+    print( paste0(wd,"/data/processed/coastlines/", aoi,
+                  '_', year, '_coastlines.csv'))
     remove(mudbanks_per_year)
   }
   
@@ -508,7 +525,7 @@ if(exportCoasts){
 
 # 
 # # test simple 2d plot
-twoD_pos <- 243000#95000
+twoD_pos <- 95000#95000
 
 subset2d_for_testPlot <- subset(mudbanks, pos == twoD_pos)
 
