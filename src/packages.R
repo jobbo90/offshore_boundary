@@ -1,5 +1,6 @@
 library(rgee)
 library(ggplot2)
+library(patchwork)
 library(readr)
 library(mapview)
 library(leaflet)

@@ -63,8 +63,8 @@ df <- rewrite(folderSelect);
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 
 # acquisition dates of drone data
-# reference_dates <- c("2019-06-20", '2019-07-13', '2020-02-19') # weg naar zee
-reference_dates <- c('2019-07-24') #, '2020-02-03') # Braamspunt
+# reference_dates <- c("2020-02-19")#c("2019-06-2, '2020-02-03'0", '2019-07-13') # weg naar zee
+reference_dates <- c('2019-07-24') #, '2020-02-03' 2019-07-24 # Braamspunt
 
 
 filtered <- vector('list', 100)
@@ -156,7 +156,7 @@ id <- eedate_to_rdate(image$get("system:time_start"))
 
 first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
 # Map$centerObject(filtCollect$first())
-Map$centerObject(image, 12)
+# Map$centerObject(image, 12)
 
 
 # coastline Points
@@ -169,8 +169,7 @@ coast_spatial <- sp_pnt_ee(coastlines_selection$coastX,
                            "#d95f0e")
 
 # plot Map
-# combination seems to be broken?s
-first + coast_spatial  
+# first + coast_spatial  
 
 
 # select folders
@@ -219,8 +218,6 @@ scenarios <- c('2019-03-16', '2019-04-01', '2019-08-23',
                '2019-09-08', '2019-08-31', '2019-10-10',
                '2019-09-24', '2019-08-07', '2019-06-04')
 
-
-
 scenariosBraamspunt <- c('2019-08-07', '2019-08-23',
                '2019-09-08','2019-09-24', '2019-10-10', "2019-10-26")
 
@@ -230,14 +227,16 @@ scenarios2020 <- c('2019-12-29', '2020-03-02', '2020-03-10',
 # nog zorgen dat bij scenarios de juiste shapefiles worden aangeroepen
 # kan het nu zo zijn dat de 2020 shapefile met beelden uit 2019 worden vergeleken.
 
+allLines <- vector('list', nrow(filtered))
+
 for (im in scenariosBraamspunt){
-  # im <- scenarios[1]
+  # im <- scenariosBraamspunt[2]
   # coastline Points
   coastlines_selection <-subset(allFiles, allFiles$DATE_ACQUIRED == as.character(as.Date(im)) &
                                   allFiles$coastX != 0)
   
   for (f in 1:nrow(filtered)){
-    # f <- 3
+    # f <- 5
     
     file <- filtered[f,1]
     # print(file)
@@ -252,7 +251,7 @@ for (im in scenariosBraamspunt){
     
     coastline <- readOGR(paste0(strings[1:5], collapse ='/' ),
                          shape, verbose = F)
-    
+
     # define CRS
     line <- spTransform(coastline, CRS("+proj=longlat +datum=WGS84"))
     # get bbox
@@ -278,31 +277,38 @@ for (im in scenariosBraamspunt){
     
     # if no points found, break look
     if(length(pointsOfInt) == 0){break}
+
     
-    testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
-                      pos = pointsOfInt$pos, DATE_ACQUIRED = pointsOfInt$DATE_ACQUIRED, 
-                      uavdate, shape, pattern = paste0(pattern[1:2], collapse ='_'))
+    reference_date <- as.Date(im)
+
+    filtCollect <- collection$filterDate(as.character(reference_date-1), as.character(reference_date+1))
+    dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
+
+    image <- ee$Image(filtCollect$sort("DATE_ACQUIRED")$first())   #
+
+    id <- eedate_to_rdate(image$get("system:time_start"))
+
+    first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
+    Map$centerObject(filtCollect$first())
+    Map$centerObject(image, 12)
     
-    output<-rbind(output,testDist)
+    
+    allLines[[f]] <- coastline
     
     
-    
-    
-    # reference_date <- as.Date(im)
-    # 
-    # filtCollect <- collection$filterDate(as.character(reference_date-1), as.character(reference_date+1))
-    # dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
-    # 
-    # image <- ee$Image(filtCollect$sort("DATE_ACQUIRED")$first())   #
-    # 
-    # id <- eedate_to_rdate(image$get("system:time_start"))
-    # 
-    # first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
-    # Map$centerObject(filtCollect$first())
-    # Map$centerObject(image, 12)
-    
-    # first + line
-      mapview(line) + bbox_buf + pointsOfInt
+      # mapview(line) + bbox_buf + pointsOfInt
+      # m1 <- mapview(allLines)
+      # m2 <- mapview(bbox_buf)
+      # m3 <- mapview(pointsOfInt)
+      # m4 <- m1 + m2 + m3
+      # m4@map + first
+
+      testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
+                        pos = pointsOfInt$pos, DATE_ACQUIRED = pointsOfInt$DATE_ACQUIRED, 
+                        uavdate, shape, pattern = paste0(pattern[1:2], collapse ='_'))
+      
+      output<-rbind(output,testDist)
+      
                          
   }
 }
