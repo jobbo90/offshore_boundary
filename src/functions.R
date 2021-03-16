@@ -261,12 +261,7 @@ build_csvLines <- function(csv){
     subsets <- unique(test1transect[,sort(c(col_of_interest(csv, 'coastDist$'), 
                                      col_of_interest(csv, 'DATE_ACQUIRED$'),
                                      col_of_interest(csv, 'pos$')))])
-    
 
-    
-    
-
-    
     # construct a data frame that matches the lines
     if(nrow(subsets) == 0){
       df_coastDist[n,] <- c(as.numeric(pos[n]), rep(NA, length(uniqueDates)))
@@ -307,6 +302,9 @@ build_csvLines <- function(csv){
     
     lines[[n]] <- Lines(list(Line(x)), ID = n)  # create line feature
     
+    
+    # lines[[n]] <- SpatialLinesDataFrame( Lines(list(Line(x)), ID = n))
+    
   }
   lines_sf <- SpatialLinesDataFrame(SpatialLines(lines,
                                                  proj4string=
@@ -315,12 +313,12 @@ build_csvLines <- function(csv){
 
   # lines_sf <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
   
-  return(lines_sf)
+  return(lines)
 }
 
 # outlier detection: rosnerTest
 # remove outliers based on a interval of 1 -3 years?
-# alternatively you could iterate over x amount of observations. e.g. every 15 observations, do a outlier test
+
 rosner <- function(x, minStd, minObsNeeded){
   # x <- subsets3$coastDist
   
@@ -332,17 +330,18 @@ rosner <- function(x, minStd, minObsNeeded){
   output <- rep(1,length.out=length(x))
   
   # only apply Rosner when there is sufficient observations
-  if(length(x) >= minObsNeeded){
+  if(length(x) >= minObsNeeded){ # should be 15
   
     # the amount of observations that are not from the same distribution
     # (alsternative hypothesis in Rosner Test)
+    # Ideally you;d want to use a boxplot test of some sort to indicate the amount of potential outliers
+    #  such that K is more specific to the sample provided. 
+    # https://ouzhang.me/2020/11/03/outliers-part2/#method-7-finding-outliers-with-hypothesis-tests
+    
     K <- length(x)-2 
-    # if(K > 10){ # never bigger than 10???
-        # K <- 10
-      # } 
-      
+    
     if(K > floor(length(x)/2)){ # never bigger than 1/2 size of observations
-      K <- 7#floor(length(x)/2)
+      K <- floor(length(x)/2) # or 7?
       }
     
     # a warning is issued when the assumed Type 1 error may not be correct
@@ -356,8 +355,7 @@ rosner <- function(x, minStd, minObsNeeded){
         outliers <- rosnerOut[rosnerOut$Outlier & rosnerOut$SD.i>minStd, 'Obs.Num']
         
         output[outliers[!is.na(outliers)]] <- 0
-      
-      
+
     } 
    
   }
@@ -388,10 +386,13 @@ rosner <- function(x, minStd, minObsNeeded){
   # Based on a study using N=1,000 simulations, Rosner's (1983) Table 1 shows the 
   # estimated true Type I error of declaring at least one outlier when none exists 
   # for various sample sizes n ranging from 10 to 100, and the declared maximum 
-  # number of outliers k ranging from 1 to 10. Based on that table, Roser (1983)
-  # declared that for an assumed Type I error level of 0.05, as long as n ≥ 25, 
+  # number of outliers k ranging from 1 to 10. Based on that table, 
+  
+  # Roser (1983) declared that for an assumed Type I error level of 0.05, as long as n ≥ 25, 
   # the estimated α levels are quite close to 0.05, and that similar results were 
-  # obtained assuming a Type I error level of 0.01. However, the table below is an 
+  # obtained assuming a Type I error level of 0.01. 
+  
+  # However, the table below is an 
   # expanded version of Rosner's (1983) Table 1 and shows results based on N=10,000
   # simulations. You can see that for an assumed Type I error of 0.05, the test
   # maintains the Type I error fairly well for sample sizes as small as n = 3 as
@@ -399,6 +400,13 @@ rosner <- function(x, minStd, minObsNeeded){
   # error of 0.01, the test maintains the Type I error fairly well for sample sizes 
   # as small as n = 15 as long as k ≤ 7.
   # 
+  #' 
+  #' As noted, using Rosner's test requires specifying the number of suspected outliers, k, in advance. 
+  #' USEPA (2013a, pp.190-191) states: “A graphical display (Q-Q plot) can be used to identify 
+  #' suspected outliers needed to perform the Rosner test”, and USEPA (2009, p. 12-11) notes: 
+  #' “A potential drawback of Rosner's test is that the user must first identify the maximum number 
+  #' of potential outliers (k) prior to running the test. Therefore, this requirement makes the test
+  #' ill-advised as an automatic outlier screening tool, and somewhat reliant on the user to identify candidate outliers.”
   
   return (output)
 }
@@ -583,9 +591,10 @@ sp_pnt_ee <- function(x,y,name,col){
 
 
 # https://stackoverflow.com/questions/29255473/most-frequent-value-mode-by-group
+# x <- test
 Mode <- function(x) {
   ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
+  ux[which.max(tabulate(match(x[!is.na(x)], ux)))]
 }
 
 
