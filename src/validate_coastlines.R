@@ -53,7 +53,7 @@ mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "Open
 leaflet() %>%
   addProviderTiles("Esri.WorldImagery")
 
-years <- seq(from = 2015, to = 2020, by = 1)
+years <- seq(from = 1985, to = 1995, by = 1)
 
 aoi <- c('Braamspunt') # WegNaarZee / Braamspunt
 # select folders
@@ -63,7 +63,7 @@ df <- rewrite(folderSelect);
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 
 # acquisition dates of drone data
-# reference_dates <- c("2020-02-19")#c("2019-06-2, '2020-02-03'0", '2019-07-13') # weg naar zee
+# reference_dates <- c("2020-02-19")#c("2019-06-20, '2019-07-13') # weg naar zee
 reference_dates <- c('2019-07-24') #, '2020-02-03' 2019-07-24 # Braamspunt
 
 
@@ -214,29 +214,40 @@ output <- data.frame(distance=double(),
            pattern = character(),
            stringsAsFactors=FALSE)
 
-scenarios <- c('2019-03-16', '2019-04-01', '2019-08-23',
-               '2019-09-08', '2019-08-31', '2019-10-10',
-               '2019-09-24', '2019-08-07', '2019-06-04')
 
-scenariosBraamspunt <- c('2019-08-07', '2019-08-23',
-               '2019-09-08','2019-09-24', '2019-10-10', "2019-10-26")
+# select correct transects & images (scenarios)
+if(aoi == 'Braamspunt' & reference_dates == '2019-07-24'){
+    scenarios <- c('2019-08-07', '2019-08-23',
+                 '2019-09-08','2019-09-24', '2019-10-10', "2019-10-26")
+  # POS range: braamspunt 26970 - 27900 by 30 m
+    posRange <- seq(26970, 27900, 30)
+  }else if(aoi == 'Braamspunt' & reference_dates == '2020-02-03'){
+    scenarios <- c('2019-12-29', '2020-03-02', '2020-03-10','2020-03-18')
+    posRange <- seq(26970, 27900, 30)
+  }else if(aoi == 'WegNaarZee' & (reference_dates == '2019-06-20' |
+                                  reference_dates == '2019-07-13')) { 
+    scenarios <- c('2019-03-16', '2019-04-01', '2019-08-23',
+                 '2019-09-08', '2019-08-31', '2019-10-10',
+                 '2019-09-24', '2019-08-07', '2019-06-04')
+    posRange <- seq(0, 1000, 30)
+  }else if(aoi == 'WegNaarZee' & reference_dates == '2020-02-19'){
+    scenarios <- c('2019-12-29', '2020-03-02', '2020-03-10','2020-03-18')
+    posRange <- seq(0, 1000, 30)}
 
-scenarios2020 <- c('2019-12-29', '2020-03-02', '2020-03-10',
-                   '2020-03-18')
 
-# nog zorgen dat bij scenarios de juiste shapefiles worden aangeroepen
-# kan het nu zo zijn dat de 2020 shapefile met beelden uit 2019 worden vergeleken.
 
 allLines <- vector('list', nrow(filtered))
 
-for (im in scenariosBraamspunt){
-  # im <- scenariosBraamspunt[2]
+for (im in scenarios){
+  # im <- scenarios[2]
   # coastline Points
   coastlines_selection <-subset(allFiles, allFiles$DATE_ACQUIRED == as.character(as.Date(im)) &
-                                  allFiles$coastX != 0)
+                                  allFiles$coastX != 0 &
+                                  (pos %in% posRange))
+  
   
   for (f in 1:nrow(filtered)){
-    # f <- 5
+    # f <- 2
     
     file <- filtered[f,1]
     # print(file)
@@ -252,6 +263,8 @@ for (im in scenariosBraamspunt){
     coastline <- readOGR(paste0(strings[1:5], collapse ='/' ),
                          shape, verbose = F)
 
+    # class(coastline) ==> spatialLines DataFrame 'sp'
+    
     # define CRS
     line <- spTransform(coastline, CRS("+proj=longlat +datum=WGS84"))
     # get bbox
@@ -262,7 +275,7 @@ for (im in scenariosBraamspunt){
     pol_bbox <- spTransform(pol_bbox, 
                             CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
     
-    bbox_buf <- rgeos::gBuffer(spgeom = pol_bbox, byid = TRUE, width = 25)
+    bbox_buf <- rgeos::gBuffer(spgeom = pol_bbox, byid = TRUE, width = 250)
     
     # back to wgs
     bbox_buf <- spTransform(bbox_buf, CRS("+proj=longlat +datum=WGS84"))
@@ -294,14 +307,18 @@ for (im in scenariosBraamspunt){
     
     
     allLines[[f]] <- coastline
+    allLines[[f]]$id <- f
     
-    
-      # mapview(line) + bbox_buf + pointsOfInt
-      # m1 <- mapview(allLines)
-      # m2 <- mapview(bbox_buf)
-      # m3 <- mapview(pointsOfInt)
-      # m4 <- m1 + m2 + m3
-      # m4@map + first
+    allLines[[f]]$test <- f
+# https://r-spatial.github.io/mapview/articles/articles/mapview_02-advanced.html#adjusting-opacity-1
+#       m0 <- mapview(transects, alpha.regions = 0.1,
+#                     homebutton = FALSE)
+#       m1 <- mapview(allLines, alpha.regions = 0.2) # zcol = "id", col.regions = c("snow", "grey", "red")
+#       m2 <- mapview(bbox_buf, legend = list(T, F))
+#       m3 <- mapview(pointsOfInt,  col.regions = c('red'))
+#       m4 <- m0 + m1 + m2 + m3
+# 
+#       m4@map + first
 
       testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
                         pos = pointsOfInt$pos, DATE_ACQUIRED = pointsOfInt$DATE_ACQUIRED, 
@@ -334,7 +351,8 @@ ggplot(output, aes(x=eval(as.name(xaxis)), y = distance, fill = eval(as.name(box
                position = position_dodge(.75)) +
   labs(y = "error [m]", x = xaxis, fill = boxes) + 
   # scale_x_discrete(expand=c(0.2,0)) +
-  
+  geom_hline(yintercept = 30, linetype="dashed") +
+  scale_y_continuous( breaks = c(0, 30, seq(100,round(max(output$distance), -2),100))) +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
     axis.line.y = element_line(size = 0.5, colour = "black"),

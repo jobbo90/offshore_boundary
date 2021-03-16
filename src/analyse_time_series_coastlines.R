@@ -53,7 +53,7 @@ mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "Open
 leaflet() %>%
   addProviderTiles("Esri.WorldImagery")
 
-years <- seq(from = 1985, to = 2020, by = 1)
+years <- seq(from = 1985, to = 1996, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
@@ -62,7 +62,7 @@ posToExclude <- c(seq(138000,147000,1000),
   
   #c('2015', '2016', '2017','2018', '2019', '2020') # c('2005','2006','2007', '2008', '2009')
 
-reference_date <- as.Date("2021-01-01")
+reference_date <- as.Date("2020-01-01")
 
 aoi <- c('Suriname') # path_row '229_56', '228_56'
 
@@ -101,7 +101,8 @@ allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.
                                                                                 sep = ',', na.strings=c("","NA")
                                                                                 )))
 
-
+# where are the duplicates comming from when loading? 
+allFiles3 <- allFiles %>% group_by_at(vars(DATE_ACQUIRED, pos)) %>% filter(n()>1) %>% ungroup()
 
 col_dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
 col_coastDist <- col_of_interest(allFiles, 'coastDist$')
@@ -155,15 +156,12 @@ filtCollect <- collection$filterDate(as.character(reference_date-300), as.charac
   filterBounds(ee$Geometry$Point(-55.54, 5.94))
 dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
 
-collection$filterBounds(ee$Geometry$Point(-55.54, 5.94))
-
 # properties <- ee_print(image)
+selectImage <- filtCollect$first()
+id <- eedate_to_rdate(selectImage$get("system:time_start"))
+first <- Map$addLayer(selectImage, visParams,  as.character(as.Date(id)))
 
-id <- eedate_to_rdate(image$get("system:time_start"))
-
-first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
-# Map$centerObject(filtCollect$first())
-Map$centerObject(image, 14)
+Map$centerObject(selectImage, 14)
 
 # coastline Ponts
 coastlines_selection <-subset(coastlines, coastlines$DATE_ACQUIRED == as.character(as.Date(id)) &
@@ -182,24 +180,13 @@ coast_spatial2 <- sp_pnt_ee(coastlines_selection_2$coastX,
                            "#ece7f2")
 
 # plot Map
-# combination seems to be broken?s
-first  +coast_spatial2+ coast_spatial 
+# first  +coast_spatial2+ coast_spatial 
   
-
-# mapview(transects)
-
 #---------------------------
 #'
 #' now multi temporal
 #' 
 #---------------------------
-
-# drops NA values
-allFiles_dropNA <- subset(arrange(allFiles, pos, DATE_ACQUIRED), !is.na(coastDist))
-
-# consider to not drop them but fill them with median value of that year?
-# probably only necessary when all observations need to be maintained in matrix
-# in case of calculating rolling averages etc. 
 
 # drop POS near  river mouths
 # 139000 - 147000 (suriname Rivier)
@@ -248,7 +235,7 @@ for (sid in allPos) {
 
 # mutate the dataframe 
 # add date properties as seperate columns
-allFiles_mutate <- allFiles_dropPOS %>% mutate(year = year(DATE_ACQUIRED),
+allFiles_mutate <- allFiles_dropPOS %>% dplyr::mutate(year = year(DATE_ACQUIRED),
                                                month = month(DATE_ACQUIRED, label=TRUE),
                                                day = day(DATE_ACQUIRED),
                                                full_date= date(DATE_ACQUIRED),
@@ -261,7 +248,7 @@ allFiles_mutate$normalized <- allFiles_mutate$coastDist - allFiles_mutate$baseli
 allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$baseline2
 
 # test simple 2d plot 
-twoD_pos <- 29000#299000
+twoD_pos <- 5000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
 # running average per x amount of observations
@@ -279,15 +266,19 @@ subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 subset2d_for_testPlot$DATE_ACQUIRED <- as.Date(subset2d_for_testPlot$DATE_ACQUIRED)
 # subset2d_for_testPlot$coast_median <- as.numeric(levels(subset2d_for_testPlot$coast_median))[subset2d_for_testPlot$coast_median]
 
+plot(subset2d_for_testPlot$DATE_ACQUIRED, subset2d_for_testPlot$coastDist)
+
 ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=coast_outlier)
-  geom_point(size = 3, color = "black") +
-  geom_point(size = 3, aes(colour = factor(coast_outlier)), alpha = 0.9) +
+  # geom_line(aes(y=coast_median),size=2, linetype= "dotted") + # add median dtrendline?
+  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.5) +
+  
+  scale_color_manual(name = "Legend",
+    values = c('red', 'blue'),
+    labels = c("outlier", "coastal distance")) +
   scale_x_date(labels = date_format("%Y")) +
   labs(x = "year", y = "Distance coastline position") +
-  # geom_line(aes(as.Date(DATE_ACQUIRED), coast_median))
-  scale_color_manual(name = "outlier",
-                     values = c("red", "black"),
-                     labels = c("outlier", "coastal distance")) +
+  # scale_fill_identity(labels=c('red','blue','green'), limits=c('#FF0000','#0000FF','#00FF00'))
+       
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -306,7 +297,22 @@ ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=co
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
+# test for line plot
+ggplot(subset2d_for_testPlot, aes(DATE_ACQUIRED, coast_median)) + geom_step()
 
+# plot alongshore variability in coastline position
+# similar to figure by Pieter Augustinus
+# filter outliers!
+ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized)) + # color=coast_outlier)
+  geom_point(size = 2, alpha = 0.1, # , color = "black"
+             aes(color = five_year_col))  +
+  guides(colour = guide_legend(override.aes = list(alpha = 1)))
+
+
+# select transects of interest
+plot(allFiles_mutate$pos[which(allFiles_mutate$coast_outlier != 0)], 
+     allFiles_mutate$normalized[which(allFiles_mutate$coast_outlier != 0)])
+identify(allFiles_mutate$pos, allFiles_mutate$normalized, n=1, labels=allFiles_mutate$pos)
 
 
 outliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 0)$coastX,
@@ -319,11 +325,9 @@ nonOutliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 1)$coast
 
 coordinatesAOI <- nonOutliers$x$setView[[1]]
 
-# -55.54, 5.94
-
 aoiCollect <- collection$filterBounds(ee$Geometry$Point(
-  median(subset(subset2d_for_testPlot, coast_outlier == 1)$coastX, na.rm = T),
-  median(subset(subset2d_for_testPlot, coast_outlier == 1)$coastY, na.rm = T)))
+  median(subset(subset2d_for_testPlot, coast_outlier == 1 & coastX != -1)$coastX, na.rm = T),
+  median(subset(subset2d_for_testPlot, coast_outlier == 1 & coastX != -1)$coastY, na.rm = T)))
 
 imageAOI <- ee$Image(aoiCollect$sort("CLOUD_COVER")$first())   #
 
@@ -336,7 +340,7 @@ firstAOI <- Map$addLayer(imageAOI, visParams,  as.character(as.Date(idAOI)))
 # plot view
 test2 <- firstAOI + nonOutliers + outliers
 setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
-        subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 13, options = list())
+        subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
 
 # export it!
 # test2 %>% 
@@ -345,7 +349,7 @@ setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1],
 #   mapshot(file = "results/temp_maps/Rplot.png", 
 #           remove_controls = c("zoomControl", "layersControl", "homeButton", "drawToolbar"))
 
-# put this in a fiction to facilitate creating frames for creating GIF 
+# put this in a function to facilitate creating frames for creating GIF 
 
 
 # plot annual coastline change
@@ -438,6 +442,7 @@ ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
 # either slope or normalized distance seems to be best / clearest but needs to be checked with full dataset
 # Also deltaCoast requries additional test when median positions are all calculated
 range <- round(quantile(allFiles_mutate$normalized,c(0.05, 0.95), na.rm=T))
+# range <- round(quantile(allFiles_mutate$deltaCoast,c(0.05, 0.95), na.rm=T))
 
 
 testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
@@ -486,6 +491,7 @@ p <-ggplot(allFiles_mutate,aes(x = pos,y = as.Date(year_col), fill=normalized))+
 
 p
 
+# 'echte' kustlijn gebruiken
 kustlijn <- readOGR('D:/BackUp_D_mangroMud_202001/Site1_Suriname_all/Analysis/IntertidalArea/Coastlines',
                               'class10_line_v5')
 
@@ -501,7 +507,7 @@ mapped <- ggplot() +
         axis.title.x = element_text(size = 14, face = 'bold'),
         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
@@ -509,10 +515,13 @@ mapped <- ggplot() +
 
 map_projected <- mapped +
   coord_map() +
-  scale_x_continuous(expand = c(0,0))#, limits=c(0,30000),)
+  scale_x_continuous(limits=c(-57.1, -53.95),
+                     expand = c(0,0))#, limits=c(0,30000),)
 
 
 p + map_projected + plot_layout(ncol = 1, nrow = 2, heights = c(1,0.1))
+# cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.5))
+
 
 # plot P shows the max distance of the coastline compared to a reference date.
 # this might become problematic when time series are increasing because:
