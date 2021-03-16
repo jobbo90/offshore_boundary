@@ -46,7 +46,7 @@ source("./src/functions.R")
 ## ---------------------------
 
 # seq1 <- seq(1985, 1999, 1)
-seq2 <- seq(2000, 2010, 1)
+seq2 <- seq(1985, 2020, 1)
 # seq3 <- seq(2002, 2002, 1)
 
 years <- c(seq2)# seq(from = 1985, to = 2020, by = 1)
@@ -59,7 +59,7 @@ min_Std <- 25 # minimal amount of meters difference before considered outlier
 year_limit <- 4 # search window in years for finding coastline obs when insufficient values per year.
 min_obs_rosner <- 10    # Amount of obs per year needed to perform Rosner Test
 
-exportCoasts <- FALSE
+exportCoasts <- T
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 leaflet() %>%
@@ -74,7 +74,7 @@ df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee
-path_rows <- c( '229_56') # '228_56','230_56'
+path_rows <- c( '229_56', '228_56', '230_56') # '228_56','230_56'
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
@@ -610,16 +610,18 @@ mudbanks$SmoothedSlopes <- (mudbanks$SmoothedPeakFract - mudbanks$maxExtentIndex
 # Replace Inf with NA
 is.na(mudbanks$SmoothedSlopes) <- do.call(cbind,lapply(mudbanks$SmoothedSlopes, is.infinite))
 
+obs <- nrow(coastlines)
+
 # reshape mudbanks such that each relative, absolute and slope drop gets it own data-entry for each pos
 # so triplicate each row and overwrite the values in the corresponding columns
 # transform such that for each pos all three coordinates become a separate entry with unique x,y coords
 mudbanks <- mudbanks %>%               # new feature or overwrite mudbanks?
   slice(rep(1:n(), each = 3)) %>%     # triplicate each row
-  group_by(pos, DATE_ACQUIRED) %>%
-  mutate(dropClass = c("rel", "abs", 'slope')) %>% # assign a column indicating what the x,y coords should represent
-  ungroup() %>%
-  group_by(pos,DATE_ACQUIRED) %>%
-  mutate(x = ifelse(dropClass == 'rel', peakCoordX, x),
+  # group_by(pos, DATE_ACQUIRED) %>%
+  mutate(dropClass = rep(c("rel", "abs", "slope"), times = obs)) %>% # assign a column indicating what the x,y coords should represent
+  # ungroup() #%>%
+  # group_by(pos,DATE_ACQUIRED) %>%
+  mutate(x = ifelse(dropClass == 'rel', peakCoordX, x), # seems to introduce NA / NaN
          y = ifelse(dropClass == 'rel', peakCoordY, y)) %>%
   mutate(x = ifelse(dropClass == 'abs', axisDistAbsX, x),
          y = ifelse(dropClass == 'abs', axisDistAbsY, y)) %>%
@@ -631,13 +633,12 @@ mudbanks <- mudbanks %>%               # new feature or overwrite mudbanks?
          mudFract = ifelse(dropClass == 'abs', mudFractAbs, mudFract)) %>%
   mutate(mudbank_extent = ifelse(dropClass == "slope", mudbank_extent_slope, mudbank_extent),
          mudbank_extent = ifelse(dropClass == "abs", mudbank_extent_abs, mudbank_extent)) %>%
-
   dplyr::select(-c(mudFractAbs, mudFractSlope, axisDistAbs,         # drop the columns that have just been copied
                    axisDistSlope, axisDistSlopeY, axisDistSlopeX,
                    axisDistAbsY, axisDistAbsX,
                    mudbank_extent_slope, mudbank_extent_abs,
-                   peakCoordX, peakCoordY)) %>%
-  ungroup()
+                   peakCoordX, peakCoordY)) #%>%
+  # ungroup()
   # dplyr::select(-ends_with('.1')) # in case the create x,y coordinates were created doubble
 
 
