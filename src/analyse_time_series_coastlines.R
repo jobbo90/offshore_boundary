@@ -53,18 +53,15 @@ mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "Open
 leaflet() %>%
   addProviderTiles("Esri.WorldImagery")
 
-years <- seq(from = 1985, to = 1996, by = 1)
+years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
 posToExclude <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
-  
-  #c('2015', '2016', '2017','2018', '2019', '2020') # c('2005','2006','2007', '2008', '2009')
 
 reference_date <- as.Date("2020-01-01")
-
-aoi <- c('Suriname') # path_row '229_56', '228_56'
+aoi <- c('Suriname') 
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
@@ -159,7 +156,7 @@ dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
 # properties <- ee_print(image)
 selectImage <- filtCollect$first()
 id <- eedate_to_rdate(selectImage$get("system:time_start"))
-first <- Map$addLayer(selectImage, visParams,  as.character(as.Date(id)))
+# first <- Map$addLayer(selectImage, visParams,  as.character(as.Date(id)))
 
 Map$centerObject(selectImage, 14)
 
@@ -248,37 +245,33 @@ allFiles_mutate$normalized <- allFiles_mutate$coastDist - allFiles_mutate$baseli
 allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$baseline2
 
 # test simple 2d plot 
-twoD_pos <- 5000#299000
+twoD_pos <- 230000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
-# running average per x amount of observations
-# runnAve <- data.frame(dated=as.Date(subset2d_for_testPlot$DATE_ACQUIRED), 
-#                      Color = zoo::rollmean(subset2d_for_testPlot$locf, 10, 
-#                                            fill = NA),
-#                      col2 = zoo::rollmean(subset2d_for_testPlot$coastDist, 0.5, 
-#                                           fill = NA),
-#                      col3 = zoo::rollmean(subset2d_for_testPlot$coast_median, 1, 
-#                                           fill = NA))
 
 # plot temporal evolution for given transect
-
 # now in ggplot form
 subset2d_for_testPlot$DATE_ACQUIRED <- as.Date(subset2d_for_testPlot$DATE_ACQUIRED)
+subset2d_for_testPlot$year_col <- as.Date(subset2d_for_testPlot$year_col)
 # subset2d_for_testPlot$coast_median <- as.numeric(levels(subset2d_for_testPlot$coast_median))[subset2d_for_testPlot$coast_median]
 
-plot(subset2d_for_testPlot$DATE_ACQUIRED, subset2d_for_testPlot$coastDist)
 
 ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=coast_outlier)
   # geom_line(aes(y=coast_median),size=2, linetype= "dotted") + # add median dtrendline?
-  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.5) +
+  geom_line(inherit.aes = FALSE, aes(x = DATE_ACQUIRED, y = coast_median),
+                                     # linetype = as.factor(pos)),
+            alpha = 0.5, size = 1.2) +
+  
+  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
   
   scale_color_manual(name = "Legend",
     values = c('red', 'blue'),
     labels = c("outlier", "coastal distance")) +
+  # scale_linetype_manual(name = ' ', values = c('dashed'), labels = c('median')) +
+  
   scale_x_date(labels = date_format("%Y")) +
+  ggtitle( paste0('position: ', twoD_pos)) +
   labs(x = "year", y = "Distance coastline position") +
-  # scale_fill_identity(labels=c('red','blue','green'), limits=c('#FF0000','#0000FF','#00FF00'))
-       
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -290,29 +283,49 @@ ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=co
         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
         # legend.key = element_rect(fill = NA),
         # legend.text = element_text(size = 15),
-        
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
         # legend.position = c(.78, .5),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
-# test for line plot
-ggplot(subset2d_for_testPlot, aes(DATE_ACQUIRED, coast_median)) + geom_step()
 
 # plot alongshore variability in coastline position
 # similar to figure by Pieter Augustinus
 # filter outliers!
 ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized)) + # color=coast_outlier)
+  scale_y_continuous(limits=c(-5000, 5000)) +
   geom_point(size = 2, alpha = 0.1, # , color = "black"
              aes(color = five_year_col))  +
-  guides(colour = guide_legend(override.aes = list(alpha = 1)))
+  scale_color_manual(name = "Legend",
+                     values = c('#d53e4f','#fc8d59','#fee08b','#ffffbf','#e6f598','#99d594','#3288bd'),
+                     guide = guide_legend(override.aes = list(alpha = 1),
+                                           title = 'cross shore position')) +
+  scale_x_reverse() +   
+  labs(x = "along shore position", y = "Distance coastline position") +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+  
 
 
 # select transects of interest
 plot(allFiles_mutate$pos[which(allFiles_mutate$coast_outlier != 0)], 
      allFiles_mutate$normalized[which(allFiles_mutate$coast_outlier != 0)])
-identify(allFiles_mutate$pos, allFiles_mutate$normalized, n=1, labels=allFiles_mutate$pos)
+# identify(allFiles_mutate$pos, allFiles_mutate$normalized, n=1, labels=allFiles_mutate$pos)
 
 
 outliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 0)$coastX,
@@ -356,11 +369,11 @@ setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1],
 # pre-requisites: 
 # groups of angles
 
-ggplot(data=allFiles_mutate, aes(bearing)) +
-  geom_histogram(binwidth = 2)
+# ggplot(data=allFiles_mutate, aes(bearing)) +
+#   geom_histogram(binwidth = 2)
 
 angles <-  c(0,5,10,15,20,180, 290, 
-             300, 310, 320, 330, 335, 340, 345, 350, 355, 360)
+             300, 330, 335, 340, 345, 350, 355, 360)
 
 angle_group <- unique(cut(allFiles_mutate$bearing, angles))
 allFiles_mutate$angle_group <- cut(allFiles_mutate$bearing,angles)
@@ -385,7 +398,7 @@ ggplot(allFiles_mutate, aes(x=eval(as.name(xaxis)), y = coast_median)) +
   geom_point(aes(colour = factor(fiveyear))) +
   scale_x_reverse() # west to east orientation
 
-level_order <- c("(180,290]","(290,300]", "(300,310]", "(310,320]", "(320,330]", 
+level_order <- c("(180,290]","(290,300]", "(300,330]", 
                  "(330,335]", "(335,340]", "(340,345]", "(345,350]",
                  "(350,355]", "(355,360]",
                  "(0,5]", "(5,10]", "(10,15]", "(15,20]", "(20,180]")
@@ -405,7 +418,7 @@ for(i in seq_len(length(level_order))){
 }
 
 #plot bearing over rate of change
-# if facet wrap enabled, per 4 yer timestep
+# if facet wrap enabled, per 5 yer timestep
 # per 10 is probably better?
 ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
   facet_wrap(paste0('~', 'fiveyear'), labeller = as_labeller(unlist(unique(allFiles_mutate$fiveyear)))) +
@@ -441,36 +454,37 @@ ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
 # Spatio temporal plot:
 # either slope or normalized distance seems to be best / clearest but needs to be checked with full dataset
 # Also deltaCoast requries additional test when median positions are all calculated
-range <- round(quantile(allFiles_mutate$normalized,c(0.05, 0.95), na.rm=T))
-# range <- round(quantile(allFiles_mutate$deltaCoast,c(0.05, 0.95), na.rm=T))
-
-
+# range <- round(quantile(allFiles_mutate$coast_median,c(0.05, 0.95), na.rm=T))
+range <- round(quantile(allFiles_mutate$slope,c(0.05, 0.95), na.rm=T))
 testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
 
-p <-ggplot(allFiles_mutate,aes(x = pos,y = as.Date(year_col), fill=normalized))+  #y = as.Date(quarterly_col)
-  # fill=slope / deltaCoast / normalized / normalized2
-  geom_tile(color= "white",size=0.1) +
+
+
+
+p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
+           aes(x = pos,y = as.Date(year_col), fill=slope))+  #y = as.Date(quarterly_col)
+  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
+  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
   scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
                        breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
                        low = "#a50026", high = "#313695", mid = '#f7f7f7',
-                       # na.value = "grey50",
                         guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
                                                 draw.llim = FALSE),
-                       oob=squish, na.value = NA) +
+                       oob=squish, na.value = NA) + #"grey50"
   labs(y = 'Date', x = 'position') +
-  scale_x_reverse() +
+  scale_x_reverse(lim=c(max(allFiles_mutate$pos)+4000, 0), expand = c(0,0)) + # 
   # geom_segment(data = data.frame(x = pos, 
   #                                xend= pos, 
   #                                y=reference_date,
   #                                yend=reference_date),
   #              aes(x=x, y=y, xend=xend, yend=yend),
   #              linetype="dashed") +
-  geom_hline(yintercept = reference_date, linetype="dashed") +
-  geom_segment(y=reference_date, yend = reference_date, linetype="dashed",
-               size = 1,
-               x=300000, xend=100000) + # doesn't work after applying reverse?
-  geom_text(aes(max(pos)+1000,reference_date,label = 'reference date'),
-            vjust = -2)+
+  # geom_hline(yintercept = reference_date, linetype="dashed") +
+  # geom_segment(y=reference_date, yend = reference_date, linetype="dashed",
+  #              size = 1,
+  #              x=300000, xend=100000) + # doesn't work after applying reverse?
+  # geom_text(aes(max(pos)+1000,reference_date,label = 'reference date'),
+  #           vjust = -2)+
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -483,13 +497,11 @@ p <-ggplot(allFiles_mutate,aes(x = pos,y = as.Date(year_col), fill=normalized))+
         # legend.key = element_rect(fill = NA),
         # legend.text = element_text(size = 15),
         
-        # legend.position = c(.78, .5),
+        # legend.position = 'none',
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
-
-p
 
 # 'echte' kustlijn gebruiken
 kustlijn <- readOGR('D:/BackUp_D_mangroMud_202001/Site1_Suriname_all/Analysis/IntertidalArea/Coastlines',
@@ -511,40 +523,145 @@ mapped <- ggplot() +
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
+        plot.background = element_rect()) # fill = '#d9d9d9'
 
 map_projected <- mapped +
   coord_map() +
   scale_x_continuous(limits=c(-57.1, -53.95),
                      expand = c(0,0))#, limits=c(0,30000),)
 
-
-p + map_projected + plot_layout(ncol = 1, nrow = 2, heights = c(1,0.1))
-# cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.5))
-
-
-# plot P shows the max distance of the coastline compared to a reference date.
-# this might become problematic when time series are increasing because:
-# dist might still be positive while actually the trend is negative 
-# also vice versa, increasing coastlineDist while the abs value is still negative.
-
-# try to use the slope, fine tune how many observations are needed for slope?
-# at the moment it is 5 observations which might be a bit small.
-# or consider both the absolute distance plot ==> order of magnitude
-# and the slope ==> moment of change + magnitude
+# alignedPLots <- align_patches(p, map_projected)
+# p + map_projected + plot_layout(ncol = 1, nrow = 2, heights = c(1,0.1), alig)
+cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
+# https://stackoverflow.com/questions/54153906/aligning-axes-of-r-plots-on-one-side-of-a-grid-together
 
 
 
+library(cowplot)
+legend <- get_legend(p)
+
+p <- p + theme(legend.position = 'none')
+
+
+allFiles_mutate <- allFiles_mutate %>% 
+  group_by(year_col) %>%
+  dplyr::mutate(delta_median = median(deltaCoast, na.rm = T)) %>%
+  dplyr::mutate(negPos = ifelse(delta_median > 0, 1,0)) %>%
+  ungroup()
+
+allFiles_mutate$negPos <- 1
+myColors <- c()
+for( i in unique(allFiles_mutate$year_col)){
+  # i <- unique(allFiles$year_col)[29]
+  
+  annualSubset <- subset(allFiles_mutate,as.Date(year_col) == i &
+                         coast_outlier == 1)
+  idx <- which(allFiles_mutate$year_col == i & 
+                 allFiles_mutate$coast_outlier == 1)
+  
+  
+  meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
+  # medianVal <- median(annualSubset$deltaCoast, na.rm =T)
+ 
+  myColors <- c(myColors, ifelse(meanVal>0 , '#2166ac', # blue if positive
+         ifelse(meanVal<0, '#b2182b', # red if negative
+                "grey90")))
+  
+  if(meanVal < 0){
+    print(paste0(i, ': ', meanVal))
+    allFiles_mutate$negPos[idx] <- 0
+  }
+  
+}
+
+test<- subset(allFiles_mutate, coast_outlier == 1 & as.Date(year_col) == i)
+# test$negPos
+
+p2 <- ggplot(subset(allFiles_mutate, coast_outlier ==1),
+       aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +  # alpha = negPos
+  geom_boxplot(aes(fill = as.factor(negPos)),  outlier.shape=NA)+#outlier.colour="black") +          
+  scale_fill_manual('mean change', labels = c('neg', 'pos'),
+                    values = c("#b2182b", '#2166ac')) +
+  guides()+
+  # https://stackoverflow.com/questions/60952318/how-to-colour-multiple-subclasses-with-similar-colours-in-ggplot-lineplot
+  coord_flip() +
+  labs(y = 'Coastline Change [m]', y = "") +
+  scale_y_continuous(limits=c(-500,500)) +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_blank(),#element_line(size = 0.5, colour = "black"),
+    # axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 12, hjust = .5, vjust = .5, face = "bold",),
+    axis.text.y = element_blank(),#element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_blank(), #element_text(size = 18, face = 'bold'),
+    
+    strip.background = element_rect(fill = "white", colour = "white"),
+    legend.key = element_rect(fill = NA),
+    # legend.text = element_text(size = 18),
+    legend.position = 'none',  #c(.9, .8),
+    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    
+    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
+    
+  )
+p2
+# combine space-time plot and coastline change plot
+# p3 <- cowplot::plot_grid(p,p2, align = "h", ncol =2, rel_widths = c(1, 0.3))
+
+# p4 <- cowplot::plot_grid(p3, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
+# 
+# cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
+
+# patchwork
+# https://stackoverflow.com/questions/41569817/align-multiple-plots-in-ggplot2-when-some-have-legends-and-others-dont
+upper <- p + p2+map_projected +legend+ plot_layout(ncol = 2, nrow = 2, widths = c(1,0.3),
+                                     heights = c(1,0.3))
+
+# final <- upper + map_projected + plot_layout(ncol = 2, nrow = 2, heights = c(1,0.3))
+# put the legend of space time plot below the coastline change plot??
 
 
 
+# http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
+blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+grid.arrange(p, p2,  blankPlot, legend,
+             ncol=2, nrow = 2, 
+             widths = c(2.7, 2.7), heights = c(0.2, 2.5))
 
 
+# plot_grid(
+#   plot_grid(
+#     p + theme(legend.position = "none")
+#     , map_projected
+#     , ncol = 1
+#     , align = "lr")
+#   , plot_grid(
+#     get_legend(g1)
+#     , ggplot()
+#     , get_legend(g3)
+#     , ncol = 2)
+#   , rel_widths = c(7,3)
+# )
 
+# grid.draw(rbind(ggplotGrob(p3), ggplotGrob(map_projected), size = "last"))
 
-
-
-
+# running average per x amount of observations
+# runnAve <- data.frame(dated=as.Date(subset2d_for_testPlot$DATE_ACQUIRED), 
+#                      Color = zoo::rollmean(subset2d_for_testPlot$locf, 10, 
+#                                            fill = NA),
+#                      col2 = zoo::rollmean(subset2d_for_testPlot$coastDist, 0.5, 
+#                                           fill = NA),
+#                      col3 = zoo::rollmean(subset2d_for_testPlot$coast_median, 1, 
+#                                           fill = NA))
 
 
 

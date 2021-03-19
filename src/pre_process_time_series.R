@@ -588,6 +588,43 @@ first + coast_spatial
 #'     good example dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
 ################################################################################
 
+# select folders
+folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
+df <- rewrite(folderSelect);
+# only csv's
+df <- df[grep('.csv', folderSelect, ignore.case = T),]
+
+
+filtered <- vector('list', 100)
+for (q in seq_along(years)) {
+  for (x in seq_along(aoi)){
+    year = years[q]
+    region = aoi[x]
+    
+    filters = c(year, region)
+    
+    filtered = rbind(filtered, df %>% 
+                       dplyr::filter(
+                         filters %>%
+                           # apply the filter of all the text rows for each pattern
+                           # you'll get one list of logical by pattern ignored_string
+                           purrr::map(~ to_keep(.x, text = text)) %>%
+                           # get a logical vector of rows to keep
+                           purrr::pmap_lgl(all)
+                       ))
+  }
+  # q <- 1
+  
+}
+filtered <- unique(filtered)
+# bind_rows!!!
+allCoastlines <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
+                                                                                    sep = ',', na.strings=c("","NA")
+)))
+
+test <- unique(allCoastlines)
+
+
 mudbanks <- coastlines3
 
 # mudbank Distance

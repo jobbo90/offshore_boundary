@@ -52,6 +52,10 @@ dataFolder <- './data/processed'
 years <- seq(from = 2000, to = 2020, by = 1)
 aoi <- c('Suriname')
 
+
+posToExclude <- c(seq(138000,147000,1000),
+                  seq(241000, 255000, 1000))  
+
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/offshore_points'), full.names = T))
 df <- rewrite(folderSelect);
@@ -84,13 +88,6 @@ allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
                                                               sep = ',', 
                                                               na.strings=c("","NA")
                                                               ))))
-# testReada <- read.csv(as.matrix(filtered)[1,1],
-         # sep = ',', na.strings=c("","NA"))
-
-# somehow all the dates lost 1 hour (due to timezone def?)
-# allFiles$year_col <- as.POSIXct(paste(as.POSIXct(allFiles$year_col), "23:00:00")) + 60*60
-# allFiles$date_col <- as.POSIXct(paste(as.POSIXct(allFiles$date_col), "23:00:00")) + 60*60
-# allFiles$quarterly_col <- as.Date(as.POSIXct(paste(as.POSIXct(allFiles$quarterly_col), "23:00:00")) + 360*60)
 
 allFiles <- allFiles %>% dplyr::mutate(year = year(DATE_ACQUIRED),
                                            month = month(DATE_ACQUIRED, label=TRUE),
@@ -110,7 +107,7 @@ uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
 
 keep_columns <- colnames(allFiles)#c('axisDist', 'dist_locf', 'distance', 'outlier', 'mudFract',
                  # 'originX', 'originY')  # necessary for mudbank output
-# mudbanks <- reshape_csvPoints(allFiles, 'x', 'y', keep_columns)
+
 mudbanks <- st_as_sf(SpatialPointsDataFrame(data.frame(
   allFiles$x, allFiles$y),
   proj4string=CRS("+proj=longlat +datum=WGS84"),
@@ -148,94 +145,6 @@ visParams = list(
 #'      
 # all unique dates
 uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
-
-# # for testing: set to cloudfree
-# cloudFree <- ee$Image(collection$filter(ee$Filter$lt("CLOUD_COVER", 30))$
-#                         filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
-#                         sort("CLOUD_COVER")$first()) #
-# 
-# 
-# filtCollect <- collection$filterDate(as.character(reference_date-20), as.character(reference_date+20))$
-#   sort("CLOUD_COVER")$first()
-# 
-# id <- as.Date(eedate_to_rdate(filtCollect$get("system:time_start")))
-
-# or get around a reference date
-
-# test <- which.min(abs(as.Date(uniqueDates) - reference_date))
-# uniqueDates <- uniqueDates[1:length(uniqueDates) == test]
-
-# good dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
-
-
-# plot one example
-reference_date <- as.Date("2009-11-15")
-nearestDate <- uniqueDates[1:length(uniqueDates) == 
-                             which.min(abs(as.Date(uniqueDates) - reference_date))]
-
-
-
-# collection for testing
-filtCollect <- collection$filterDate(as.character(as.Date(nearestDate)-1), 
-                                     as.character(as.Date(nearestDate)+1))
-dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
-
-first <- Map$addLayer(filtCollect$first(), visParams, paste0('landsat: ',nearestDate))
-
-# or on multiple entries 
-pos_to_test <- seq(from = 165000, to = 248000, by = 1000)
-years_to_test <- 2005
-subset_for_testPlot <- subset(allFiles, pos %in% pos_to_test &
-                                year == years_to_test)
-
-mudbanks_selection <-subset(subset_for_testPlot, mudbank_outlier != 1 &
-                              mudbank_extent > 0)
-
-mudbank_selection_Outlier <- subset(subset_for_testPlot,
-                                    mudbank_outlier >= 1 |
-                                    mudbank_extent < 0)
-
-
-plot(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$mudbank_extent+
-                                         subset_for_testPlot$coast_median),
-     xlim= rev(range(rev(subset_for_testPlot$pos))),
-     xlab="alongshore position", ylab="along transect distance [m]",
-     main = paste0('position: ',min(pos_to_test),' - ', 
-                   max(pos_to_test), ' in ', years_to_test))
-
-points(rev(subset(subset_for_testPlot, mudbank_outlier == 1)$pos),
-       rev(subset(subset_for_testPlot, mudbank_outlier == 1)$mudbank_extent + 
-             + subset(subset_for_testPlot, mudbank_outlier == 1)$coast_median), 
-       col='red')
-points(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$coast_median),
-       col = 'blue')
-
-legend("topleft", 
-       legend = c("boundary", "outliers", 'median coastal position'),
-       col = c('black', 'red', 'blue'),
-       pt.cex = 2,pch = c(1,1))
-
-mudbankPos <- sp_pnt_ee(mudbanks_selection$x,
-                        mudbanks_selection$y,  
-                        'non outlier', "#ece7f2")
-
-outlierPos <- sp_pnt_ee(mudbank_selection_Outlier$x,
-                        mudbank_selection_Outlier$y,  'outlier',
-                        "orange")
-
-
-first + mudbankPos +outlierPos
-
-
-
-plot(as.numeric(as.character(mudbanks_selection$pos)), 
-     mudbanks_selection$mudbank_extent)
-points(as.numeric(as.character(mudbank_selection_Outlier$pos)),
-       mudbank_selection_Outlier$mudbank_extent, col = 'red')
-
-
-all_years <- as.Date(as.POSIXlt(unique(allFiles$year_col)))
-group_pos <- unique(allFiles$pos)
 
 # get median position for each year
 for(y in 1:length(all_years)){
@@ -334,19 +243,7 @@ for(y in 1:length(all_years)){
       allFiles[which(row.names(allFiles) %in% row.names(subsets)), 'distY'] <-
         # pdens$lon[which.max(pdens$count)]
         destPoint[2]
-      # 
-      # allObs_year <- SpatialPoints(data.frame(x = subsets$x, y = subsets$y),
-      #                         CRS("+proj=longlat +datum=WGS84"))
-      # all_obs_ajoining <- SpatialPoints(data.frame(x = ajoining_points$x, 
-      #                                              y = ajoining_points$y),
-      #                                   CRS("+proj=longlat +datum=WGS84"))
 
-      # mapView(originPoint, col.regions = c("blue")) + mapView(spatialDest, col.regions = c('yellow')) +
-      #   mapView(allObs_year) + mapView(spatial_pdens, col.regions = c('orange')) +
-      #   mapView(all_obs_ajoining) + 
-      #   mapView(maxCount_spatial, col.regions = c("red"))
-      #   
-      #   
     }
     
    
@@ -354,95 +251,152 @@ for(y in 1:length(all_years)){
   }
 }
 
+# # for testing: set to cloudfree
+# cloudFree <- ee$Image(collection$filter(ee$Filter$lt("CLOUD_COVER", 30))$
+#                         filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
+#                         sort("CLOUD_COVER")$first()) #
+# 
+# 
+# filtCollect <- collection$filterDate(as.character(reference_date-20), as.character(reference_date+20))$
+#   sort("CLOUD_COVER")$first()
+# 
+# id <- as.Date(eedate_to_rdate(filtCollect$get("system:time_start")))
+
+# or get around a reference date
+
+# test <- which.min(abs(as.Date(uniqueDates) - reference_date))
+# uniqueDates <- uniqueDates[1:length(uniqueDates) == test]
+
+# good dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
 
 
-# filter points in river mouths:
-# 139000 - 147000 (suriname Rivier)
-# 242000 -252000  (saramacca rivier / coppename)
-image <- collection$filterDate(as.character(as.Date('2000-01-01')-1), 
-                                     as.character(as.Date('2000-12-31')+1))$
-                  sort("CLOUD_COVER")$first()
+# plot one example
+reference_date <- as.Date("2009-11-15")
+years_to_test <- year(reference_date)
+nearestDate <- uniqueDates[1:length(uniqueDates) == 
+                             which.min(abs(as.Date(uniqueDates) - reference_date))]
+
+# collection for testing
+filtCollect <- collection$filterDate(as.character(as.Date(nearestDate)-1), 
+                                     as.character(as.Date(nearestDate)+1))
+dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
+first <- Map$addLayer(filtCollect$first(), visParams, paste0('landsat: ',nearestDate))
+
+# one image - all observations
+subset_for_testPlot <- subset(allFiles, DATE_ACQUIRED == reference_date &
+                                !(pos %in% posToExclude))
+mudbanks_selection <-subset(subset_for_testPlot, mudbank_outlier != 1 &
+                              mudbank_extent > 0)
+
+mudbank_selection_Outlier <- subset(subset_for_testPlot,
+                                    mudbank_outlier >= 1 |
+                                      mudbank_extent < 0)
+
+#'
+#' Plot 1 date with all observations 
+
+plot(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$mudbank_extent+
+                                         subset_for_testPlot$coast_median),
+     xlim= rev(range(rev(subset_for_testPlot$pos))),
+     xlab="alongshore position", ylab="along transect distance [m]",
+     main = paste0(reference_date))
+points(rev(mudbank_selection_Outlier$pos),
+       rev(mudbank_selection_Outlier$mudbank_extent + 
+             + mudbank_selection_Outlier$coast_median), col='red')
+points(rev(subset_for_testPlot$pos), rev(subset_for_testPlot$coast_median),
+       col = 'blue')
+legend("topleft", 
+       legend = c("boundary", "outliers", 'median coastal position'),
+       col = c('black', 'red', 'blue'),
+       pt.cex = 2,pch = c(1,1))
+
+mudbankPos <- sp_pnt_ee(mudbanks_selection$axisDistAbsX,
+                        mudbanks_selection$axisDistAbsY,  
+                        'non outlier abs', "#ece7f2")
+
+mudbankPos2 <- sp_pnt_ee(mudbanks_selection$axisDistSlopeX,
+                        mudbanks_selection$axisDistSlopeY,  
+                        'non outlier slope', "#ece7f2")
+
+outlierPos <- sp_pnt_ee(mudbank_selection_Outlier$x,
+                        mudbank_selection_Outlier$y,  'outlier',
+                        "orange")
+
+first + mudbankPos + mudbankPos2 + outlierPos
+
+all_years <- as.Date(as.POSIXlt(unique(allFiles$year_col)))
+group_pos <- unique(allFiles$pos)
 
 
-# group_pos <- seq(95000, 120000,1000)
-# group_pos <- seq(190000, 240000,1000)
-# group_pos <- seq(280000, 340000,1000)
-subsets <- subset(allFiles,  year_col == all_years[1] &
-                    # as.numeric(as.character(pos)) %in% pos_to_test &
-                    mudbank_outlier == 0)
+# now all obs within a year
+annual_obs <- subset(allFiles,  
+                     as.Date(year_col) == as.Date(paste(years_to_test, 1, 1, sep = "-")) &
+                       !(pos %in% posToExclude) &
+                       mudbank_outlier != 1 &
+                       mudbank_extent > 0)
+annual_obs2 <- subset(allFiles,  
+                      as.Date(year_col) == as.Date(paste(2015, 1, 1, sep = "-")) &
+                        !(pos %in% posToExclude) &
+                        mudbank_outlier != 1 &
+                        mudbank_extent > 0)
 
-# subsets2 <- subset(allFiles,  year_col == all_years[7] &
-#                     # as.numeric(as.character(pos)) %in% pos_to_test &
-#                     mudbank_outlier == 0)
-# subsets3 <- subset(allFiles,  year_col == all_years[12] &
-#                      # as.numeric(as.character(pos)) %in% pos_to_test &
-#                      mudbank_outlier == 0)
+# ggplot(annual_obs, aes(x = axisDistAbsX, y = axisDistAbsY)) + 
+#   geom_point(size = 0.5, alpha = 0.1) + 
+#   geom_point(annual_obs2, mapping = aes(x = axisDistAbsX, y = axisDistAbsY), 
+#              size = 0.5, alpha = 0.1, color = 'red') + 
+#   coord_equal() + 
+#   xlab('Longitude') + 
+#   ylab('Latitude')  
 
-allObs <- sp_pnt_ee(subsets$x,
-          subsets$y,  'allObs',
+annual_obs_sp <- sp_pnt_ee(annual_obs$axisDistAbsX[!is.na(annual_obs$axisDistAbsX)],
+                           annual_obs$axisDistAbsY[!is.na(annual_obs$axisDistAbsX)],  
+                           'axisDistAbs',
           "orange")
 
+annual_obs_sp2 <- sp_pnt_ee(annual_obs$axisDistSlopeX[!is.na(annual_obs$axisDistSlopeX)],
+                            annual_obs$axisDistSlopeY[!is.na(annual_obs$axisDistSlopeX)],  'axisDistslope',
+                    "blue")
 
-# remove NA
-meanPos <- SpatialPoints(data.frame(x = subsets$distX[complete.cases(subsets$distX)],
-                                    y =  subsets$distY[complete.cases(subsets$distY)]),
+# calculated mean position to spatial dataset
+meanPos <- SpatialPoints(data.frame(x = annual_obs$distX[complete.cases(annual_obs$distX)],
+                                    y =  annual_obs$distY[complete.cases(annual_obs$distY)]),
                          CRS("+proj=longlat +datum=WGS84"))
 
-meanPos_sp <- sp_pnt_ee(meanPos$x,
-          meanPos$y,  'meanPos',
-          "red")
+meanPos_sp <- sp_pnt_ee(meanPos$x,meanPos$y, 'meanPos', "red")
 
-
-# meanPos2 <- SpatialPoints(data.frame(x = subsets2$distX[complete.cases(subsets2$distX)],
-#                                     y =  subsets2$distY[complete.cases(subsets2$distY)]),
-#                          CRS("+proj=longlat +datum=WGS84"))
-# meanPos3 <- SpatialPoints(data.frame(x = subsets3$distX[complete.cases(subsets3$distX)],
-#                                      y =  subsets3$distY[complete.cases(subsets3$distY)]),
-#                           CRS("+proj=longlat +datum=WGS84"))
-# 
-# mapView(meanPos, col.regions = c("red"), layer.name = as.character(all_years[4])) +
-#   mapView(meanPos2, col.regions = c("green"), layer.name = as.character(all_years[7])) +
-#   mapView(meanPos3, col.regions = c("blue"), layer.name = as.character(all_years[10]))
-#   
-
+meanPos_sp +annual_obs_sp+ annual_obs_sp2
 
 # or on combination data set( neighbouring transects)
 # combined <- rbind(subsets, ajoining_points)
-selection_density <- pointdensity(df = subsets, lat_col = "x", lon_col = "y",
-                                  date_col = NULL, grid_size = 0.1, 
-                                  radius = 1)
+selection_density <- pointdensity(df = annual_obs, lat_col = "axisDistAbsX", 
+                                  lon_col = "axisDistAbsY", date_col = NULL, 
+                                  grid_size = 0.1, radius = 1)
+
+
+countRange <- round(quantile(selection_density$count,c(0.25, 0.75), na.rm=T))
 
 # now it is the trick to find the max count for the selected transect
-Tempcount <- merge(subsets, selection_density, by.x=c('x', 'y'), 
+Tempcount <- merge(annual_obs, selection_density, by.x=c('axisDistAbsX', 'axisDistAbsY'), 
                    by.y=c('lat', 'lon'))
 
-
-# find max for each column
+# find max for each position
 test <- Tempcount %>% 
   dplyr::group_by(pos) %>%
+  dplyr::filter(count > countRange[1]) %>% # not yet  very succesfull
   top_n(1, count)
 
 # ggplot idea: https://www.earthdatascience.org/tutorials/visualize-2d-point-density-ggmap/
-
+plot(test$pos, test$count)
 
 
 # maxCount <- Tempcount[Tempcount$count == max(Tempcount$count),]
-maxCount <- SpatialPoints(data.frame(x = test$x, 
-                                             y = test$y),
+maxCount <- SpatialPoints(data.frame(x = test$axisDistAbsX, 
+                                             y = test$axisDistAbsY),
                                   CRS("+proj=longlat +datum=WGS84"))
-
 
 maxCount_spatial <- sp_pnt_ee(maxCount$x,maxCount$y,
                               'density', "yellow")
-
-
-image_date<-eedate_to_rdate(image$get("system:time_start"))
-first <- Map$addLayer(image, visParams, paste0('landsat: ',image_date))
-
-Map$centerObject(image, 14)
-# transects <- build_csvLines(allFiles)
-
-first + allObs  + meanPos_sp + maxCount_spatial
+first + annual_obs_sp  + meanPos_sp + maxCount_spatial
 
 
 # test mudbank estimate on 1 image

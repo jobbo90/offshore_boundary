@@ -313,7 +313,7 @@ build_csvLines <- function(csv){
 
   # lines_sf <- SpatialLines(lines, proj4string=CRS("+proj=longlat +datum=WGS84"))
   
-  return(lines)
+  return(lines_sf)
 }
 
 # outlier detection: rosnerTest
