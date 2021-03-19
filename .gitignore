@@ -101,6 +101,7 @@ target/
 /data/processed
 /data/raw
 /results/temp_maps
+/results/Validation
 /results
 /data/processed/validation/WegNaarZee
 /data/processed/validation/Braamspunt
