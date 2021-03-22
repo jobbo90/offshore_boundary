@@ -57,7 +57,7 @@ years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
-posToPlot <- 230000
+posToPlot <- 137000#138000#156000#230000
   
 reference_date <- as.Date("2020-01-01")
 aoi <- c('Suriname') 
@@ -229,6 +229,7 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
                      values = c('red', 'blue'),
                      labels = c("outlier", "coastal distance")) +
   # scale_linetype_manual(name = ' ', values = c('dashed'), labels = c('median')) +
+  scale_y_continuous(limits=c(0, 1200)) +
   
   scale_x_date(labels = date_format("%Y")) +
   ggtitle( paste0('position: ', posToPlot)) +
@@ -246,7 +247,7 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
         # legend.text = element_text(size = 15),
         plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
                                   vjust = -5), 
-        legend.position = c(.78, .2),
+        legend.position = c(.88, .2),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
@@ -254,14 +255,23 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
 
 time_series
 
-
-
 # put this in a function to facilitate creating frames for creating GIF 
 allDates <- unique(allFiles_mutate$DATE_ACQUIRED) # consider non-outlier dates only?
-for(da in nrow(df_img)){
-  # da <- 2
+
+i <- 1
+for(da in allDates){         #1:nrow(df_img)){
+  # da <- allDates[3]
+  # da <- '2013-05-02'
+  # da <- '2009-09-28'
   
-  file <- df_img[da,1]
+  datePattern <- gsub(x=da,
+                      pattern="-",replacement="",fixed=T)
+  
+  file <- df_img %>% 
+    filter(str_detect(text,datePattern)) %>%
+    filter(str_detect(text, as.character(posToPlot)))
+
+  # file <- df_img[da,1]
   strings <- str_split(file, '/')[[1]]
   fullName <- gsub(x=strings[6] ,pattern=".tif",replacement="",fixed=T)
   
@@ -270,33 +280,42 @@ for(da in nrow(df_img)){
   pos <-  str_split(fullName, "_")[[1]][2]
   date <- as.Date(str_split(fullName, "_")[[1]][3], "%Y%m%d")
   
+  # improve: also upload 10 (?) historic observations with lower alpha val and 
+  # different colour
+  
   # load point obs
-  poi <- subset(allFiles_mutate, as.Date(as.character(DATE_ACQUIRED)) == date & 
+  poi <- subset(allFiles_mutate, as.Date(as.character(DATE_ACQUIRED)) == as.Date(da) & 
                   !is.na(coastX) &
-                  coastX != -1) 
+                  coastX != -1)
   
   # create time series plot th moving horizontal line
-  forPlot<- time_series + geom_vline(xintercept = date,size=1, linetype= "solid") 
+  forPlot<- time_series + geom_vline(xintercept = as.Date(da),size=1, linetype= "solid") 
   
-  if(nrow(poi) > 0){
+  # create the RGB plot if there was a image
+  if(nrow(poi) > 0 & nrow(file)  > 0){
     
     brickRGB <- brick(paste0(file))
     # stacked <- stack(paste0(file))
-    # crs(brickRGB) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0" 
+    # crs(brickRGB) <- CRS("+init=epsg:4326")#"+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+    
+    # test <- projectRaster(brickRGB, crs=CRS("+init=epsg:4326"), res=30)
     
     repr <- projectRaster(brickRGB,
+                          # CRS("+init=epsg:4326"))
                           crs = CRS(as.character("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")))
-    
+    # CRS(as.character('+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0'))
     # names(brickRGB) <- bandNames # depends on sensor..
     # bandNames <- c('blue', 'green', 'red', 'nir', 'swir1')
     rgb_plt <-
-      ggRGB(img = repr,  r = 'B5', g = 'B4', b = 'B3', stretch = "lin", alpha = 0.8) + 
+      ggRGB(img = repr,  r = 'NIR', g = 'Red', b = 'Green', stretch = "lin", alpha = 0.8) +
       geom_point(data = data.frame(poi), 
                  mapping = aes(x = coastX, y = coastY),
                  colour = "blue", size = 3, alpha = 0.8) +
       # annotation_scale(location = "br", width_hint = 0.3, 
       #                  pad_x = unit(4, "cm"), pad_y = unit(0.8, "cm"),
       #                  text_col = c('white'), text_cex = 1) + # north arrow or scale bar?
+      
+      #+proj=utm +zone=28 +datum=WGS84 +units=m +no_defs 
       
       labs(y = 'Lat', x = 'Long', title = paste0(date)) +
       labs(caption='Landsat (USGS)                                                   @JdV') +
@@ -331,15 +350,16 @@ for(da in nrow(df_img)){
   # if there is now POI update times series
   # and make sure that brick RGB is still plotted but with the previous image
   
-  # ggsave(file.path("./results/GIF/frames",sprintf('%04d.png',da)),
-  #        dpi=200, width=15, height=15, units='cm')
-  ggsave(file.path(paste0("./results/GIF/frames/", pos, '_',
-                          str_split(fullName, "_")[[1]][3],
-                          '.png')),plot,
+  ggsave(file.path("./results/GIF/frames",sprintf('%04d.png',i)),
          dpi=200, width=31, height=18, units='cm')
-  
-  
-  
+
+  # 
+  # ggsave(file.path(paste0("./results/GIF/frames/", pos, '_',
+  #                         str_split(fullName, "_")[[1]][3],
+  #                         '.png')),plot,
+  #        dpi=200, width=31, height=18, units='cm')
+
+  i <- i + 1
 }
 
 
