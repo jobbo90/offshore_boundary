@@ -57,7 +57,7 @@ years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
-posToExclude <- c(seq(138000,147000,1000),
+posToExclude <- c(seq(139000,147000,1000),
                   seq(241000, 255000, 1000))  
 
 reference_date <- as.Date("2020-01-01")
@@ -124,7 +124,7 @@ coastlines <- st_as_sf(SpatialPointsDataFrame(data.frame(
 # transects <- build_csvLines(allFiles)
 
 visParams = list(
-  bands = c("B5", "B4", "B3"),
+  bands = c("NIR", "Red", "Green"),
   min = 0.05, max = 0.4, gamma = 1.4
 )
 
@@ -144,14 +144,8 @@ collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")
 
 collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")
 
-collection <- collectionL5#collectionL8$merge(collectionL5)$#merge(collectionL7)$
-  filter(ee$Filter$lt("CLOUD_COVER", 30))
-
-# ee_print(filtCollect)
-
-filtCollect <- collection$filterDate(as.character(reference_date-300), as.character(reference_date+300))$
-  filterBounds(ee$Geometry$Point(-55.54, 5.94))
-dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
+collection <- collectionL8$merge(collectionL5)$#merge(collectionL7)$
+  filter(ee$Filter$lt("CLOUD_COVER", 50))
 
 #---------------------------
 #'
@@ -173,7 +167,8 @@ group_pos <- unique(allFiles_dropPOS$pos)
 allFiles_mutate <- allFiles_dropPOS 
 
 # test simple 2d plot 
-twoD_pos <- 230000#299000
+# 137000 138000 Braamspunt / 156000 WnZ
+twoD_pos <- 138000#156000#230000#138000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
 # plot temporal evolution for given transect
@@ -198,21 +193,24 @@ proj4string(pol_bbox) <- CRS("+init=epsg:4326")
 # reproject to allow a gbuffer 
 pol_bbox <- spTransform(pol_bbox, 
                         CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs")))
-bbox_buf <- rgeos::gBuffer(spgeom = pol_bbox, byid = TRUE, width = 1000)
+bbox_buf <- rgeos::gBuffer(spgeom = pol_bbox, byid = TRUE, width = 3000)
 
 # back to wgs
 bbox_buf <- spTransform(bbox_buf, CRS("+proj=longlat +datum=WGS84"))
 ext <- extent(bbox_buf)
 
-expcrs <- collection$select('B1')$first()$projection()$crs()$getInfo()
+# 
+expcrsL5 <- collectionL5$select('B3')$first()$projection()$crs()$getInfo()
+expcrs <- collection$select('B3')$first()$projection()$crs()$getInfo()
 expextent <- ee$Geometry$LinearRing(list(c(ext@xmin, ext@ymin), c(ext@xmax, ext@ymin), 
                                         c(ext@xmax, ext@ymax), c(ext@xmin, ext@ymax), c(ext@xmin, ext@ymin)), 
                                    'EPSG:4326', F)
-Map$addLayer(expextent)
+bboxForPlot <- Map$addLayer(expextent)
 
+m1 <- mapview(ext)
 m2 <- mapview(bbox_buf)
 m3 <- mapview(coastlines_selection_sp,  col.regions = c('red'))
-m4@map <- m2 + m3
+m4 <- m2 + m3
 
 aoiCollect <- collection$filterBounds(ee$Geometry$Point(
   coordinates(bbox_buf)[1,1],
@@ -223,22 +221,54 @@ ic_names <- aoiCollect %>%
   ee$ImageCollection$aggregate_array("DATE_ACQUIRED") %>%
   ee$List$getInfo()
 
-
 # names <- img$bandNames()$getInfo()
-export_bands = c("B1","B2", "B3", "B4", "B5", "B6", "B7")
+export_bands = c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2")
+
+
+opt_selectorsL5 <- c("B1","B2", "B3", "B4", "B5", "B7")
+opt_namesL5 <- c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2" )
+
+opt_selectorsL8 <- c("B2", "B3", "B4", "B5", "B6", "B7")
+opt_namesL8 <- c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2" )
 
 # get all images for download
 # https://rdrr.io/github/r-spatial/rgee/man/ee_imagecollection_to_local.html
 potential_dates <- nonOutliers$DATE_ACQUIRED
 
 for(da in ic_names){
-  # da <- ic_names[1]
+  # da <- ic_names[191]
+  # da <- '2013-05-02'
+  # da <- '2009-09-28'
+  
   img <- ee$Image(aoiCollect$filterDate(as.character(as.Date(da)-1), 
                                  as.character(as.Date(da)+1))$
     sort("system:time_start")$first())
-                               
-                               
+  
   idAOI <- eedate_to_rdate(img$get("system:time_start"))
+  landsat <- img$get("SPACECRAFT_ID")$getInfo()
+  
+  # img <- img$reproject(collectionL5$select('B3')$first()$projection())
+  # img <- img$reproject(crs = "EPSG:4326", scale = 30) # 32621
+  # imgForPlot <- Map$addLayer(img, visParams,  as.character(as.Date(idAOI)))
+  # img$get('MAP_PROJECTION')$getInfo()
+  # img$get('UTM_ZONE')$getInfo()
+  # m4@map + imgForPlot + bboxForPlot
+                               
+  
+  if (landsat == 'LANDSAT_5'){
+    img<-img$select(
+      opt_selectors = opt_selectorsL5,
+      opt_names = opt_namesL5
+    )
+  }
+  
+  if (landsat == 'LANDSAT_8'){
+    img<-img$select(
+      opt_selectors = opt_selectorsL8,
+      opt_names = opt_namesL8
+    )
+  }
+  
   # firstAOI <- Map$addLayer(img, visParams,  as.character(as.Date(idAOI)))
   
   clouds <- img$get('CLOUD_COVER')$getInfo()
@@ -247,21 +277,22 @@ for(da in ic_names){
     # get bandstack of the hourly data for current var
     expimg = img$select(export_bands)
     
+    # img$select(opt_selectors = c("Blue"))$projection()$getInfo()
+    
     sceneID <- img$get("LANDSAT_SCENE_ID")$getInfo()
     
     # export
     task =ee$batch$Export$image$toDrive(
-      # ee_image_to_drive(
       image=expimg,
       region=expextent,
       scale=30,
-      crs=expcrs,
+      # crs=expcrs, # for now leaving at system default seems to work best for landsat
       description= paste0(sceneID),
-      folder ='GEE',
+      folder ='GEE_job',
       fileNamePrefix= paste0(sceneID, '_',twoD_pos, '_',
                              gsub('-', '',  as.Date(da))))
-    
-    task$start()
     paste0(sceneID, ' started')
+    task$start()
+    
   }
 }

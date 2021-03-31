@@ -60,7 +60,7 @@ years <- seq(from = 1985, to = 2020, by = 1)
 posToExclude <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
 
-reference_date <- as.Date("2020-01-01")
+reference_date <- as.Date("1985-01-01")
 aoi <- c('Suriname') 
 
 # select folders
@@ -295,12 +295,12 @@ ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=co
 # plot alongshore variability in coastline position
 # similar to figure by Pieter Augustinus
 # filter outliers!
-ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized)) + # color=coast_outlier)
+ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized2)) + # color=coast_outlier) / deltaCoast / 
   scale_y_continuous(limits=c(-5000, 5000)) +
   geom_point(size = 2, alpha = 0.1, # , color = "black"
              aes(color = five_year_col))  +
-  scale_color_manual(name = "Legend",
-                     values = c('#d53e4f','#fc8d59','#fee08b','#ffffbf','#e6f598','#99d594','#3288bd'),
+  scale_color_manual(name = "Legend", 
+                     values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
                      guide = guide_legend(override.aes = list(alpha = 1),
                                            title = 'cross shore position')) +
   scale_x_reverse() +   

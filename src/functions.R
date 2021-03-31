@@ -551,27 +551,21 @@ get_dists2 <- function(x, lon, lat, bearing, dist){
     out[negDist,paste0(pattern, 'X', collapse = '')] <- -1
     out[negDist,paste0(pattern, 'Y', collapse = '')] <- -1
     
-    # 
-    # out <- cbind(out, coords_out[[paste0(pattern, 'X', collapse = '')]],
-    #              coords_out[[paste0(pattern, 'Y', collapse = '')]])
-    
-    # colnames(out) <- c(paste0(pattern, 'X', collapse = ''), paste0(pattern, 'Y', collapse = ''))
   }
   
   # drop NA col
   out <- out[,-1]
-  
-  
   x <- cbind(data.frame(x), out)
   
   # make it spatial
-  SpatialPoints <- SpatialPointsDataFrame(data.frame(x[,'x'], x[,'y'] ),
-                                          data = x,
-                                          proj4string=CRS("+proj=longlat +datum=WGS84"))
-  points_sf <- suppressWarnings(st_as_sf(SpatialPoints))
+  # SpatialPoints <- SpatialPointsDataFrame(data.frame(x[,'x'], x[,'y'] ),
+  #                                         data = x,
+  #                                         proj4string=CRS("+proj=longlat +datum=WGS84"))
+  # points_sf <- suppressWarnings(st_as_sf(SpatialPoints))
   
   
-  return(points_sf)
+  # return(points_sf)
+  return(x)
 }
 
 sp_pnt_ee <- function(x,y,name,col){
@@ -598,4 +592,13 @@ Mode <- function(x) {
 }
 
 
-
+# https://stackoverflow.com/questions/6836409/finding-local-maxima-and-minima
+inflect <- function(x, threshold = 2){
+  # x = runnAve$rolling
+  # threshold = 25
+  # n = -24
+  up   <- sapply(1:threshold, function(n) c(x[-(seq(n))], rep(NA, n)))
+  down <-  sapply(-1:-threshold, function(n) c(rep(NA,abs(n)), x[-seq(length(x), length(x) - abs(n) + 1)]))
+  a    <- cbind(x,up,down)
+  list(minima = which(apply(a, 1, min) == a[,1]), maxima = which(apply(a, 1, max) == a[,1]))
+}
