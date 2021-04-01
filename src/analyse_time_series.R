@@ -86,10 +86,10 @@ allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
                                                               sep = ',', 
                                                               na.strings=c("","NA")
                                                               ))))
-
-allFiles <- allFiles %>% dplyr::mutate(year = year(DATE_ACQUIRED),
-                                           month = month(DATE_ACQUIRED, label=TRUE),
-                                           day = day(DATE_ACQUIRED))
+# 
+# allFiles <- allFiles %>% dplyr::mutate(year = year(DATE_ACQUIRED),
+#                                            month = month(DATE_ACQUIRED, label=TRUE),
+#                                            day = day(DATE_ACQUIRED))
 
 # all unique transect (id's)
 allPos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
@@ -150,8 +150,8 @@ uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 all_years <- unique(allFiles$year_col)
 group_pos <- unique(allFiles$pos)
 
-allFiles$mudbankObs <- NA
-allFiles$mudbankObsOutlier <- NA
+# allFiles$mudbankObs <- NA
+# allFiles$mudbankObsOutlier <- NA
 
 # get median position for each year
 for(y in 1:length(all_years)){
@@ -211,6 +211,33 @@ for(y in 1:length(all_years)){
   }
 }
 
+# plot alongshore variability of mud fractions
+# allFiles$SmoothedPeakFract
+range <- round(quantile(subset(allFiles, 
+                               !is.na(SmoothedPeakFract) & 
+                               SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05, 0.99), 
+                        na.rm=T), 2)
+
+p <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 ),
+           aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  #y = as.Date(quarterly_col)
+  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
+  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
+  scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
+                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+                       low = "#a50026", high = "#313695", mid = '#f7f7f7',
+                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+                                               draw.llim = FALSE),
+                       oob=squish, na.value = NA) + #"grey50"
+  labs(y = 'Date', x = 'position') +
+  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0))  
+
+
+
+
+
+
+
+
 # # for testing: set to cloudfree
 # cloudFree <- ee$Image(collection$filter(ee$Filter$lt("CLOUD_COVER", 30))$
 #                         filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
@@ -230,7 +257,7 @@ for(y in 1:length(all_years)){
 
 
 # plot one example
-reference_date <- uniqueDates[215] #as.Date("2003-11-15") # uniqueDates[150]
+reference_date <- as.Date("2009-09-12") #as.Date("2003-11-15") # uniqueDates[150]
 years_to_test <- year(reference_date)
 nearestDate <- uniqueDates[1:length(uniqueDates) == 
                              which.min(abs(as.Date(uniqueDates) - as.Date(reference_date)))]
@@ -258,15 +285,62 @@ mudbankPos <- sp_pnt_ee(mudbanks_selection$x,
                         'non outlier abs', "#ece7f2")
 
 outlierPos <- sp_pnt_ee(mudbank_selection_Outlier$x,
-                        mudbank_selection_Outlier$y,  'outlier',
+                         mudbank_selection_Outlier$y,  'outlier',
                         "orange")
 
-first + mudbankPos + outlierPos
+# first + mudbankPos + outlierPos
 
 
 #'
 #' Plot 1 date with all observations 
 #' 
+#' 
+
+uniqueDates[which.min(abs(as.Date(uniqueDates) - as.Date("2009-11-3")))]
+
+reference_date <- as.Date(c("2009-09-12","2009-09-28", "2009-11-07", "2009-11-15")) #as.Date("2003-11-15") 
+subsetSelectedDates <- subset(allFiles, as.Date(DATE_ACQUIRED) %in% reference_date)
+facet <- 'DATE_ACQUIRED'
+subsetSelectedDates$meanMud
+
+alongshoreFracts <- ggplot(subsetSelectedDates, aes(x= pos, y = SmoothedPeakFract,  #meanMud
+                               colour = as.factor(mudbank_outlier))) + 
+  
+  geom_point(size = 3, alpha = 0.6) + # ,
+  geom_smooth(method='lm') +
+  # geom_point(aes(x= pos, y = meanMud, colour = as.factor(mudbank_outlier)),
+  #            size = 3, alpha = 0.6, colour = 'black') +
+  facet_wrap(paste0('~', facet)) + # , labeller = as_labeller(unlist(variable_names))
+  # scale_color_manual(labels = c("non-outlier","outlier"), values = c("blue", "red")) +
+  # guides(color=guide_legend("my title")) +
+  scale_x_reverse(lim=c(max(subsetSelectedDates$pos)+4000, 
+                        min(subsetSelectedDates$pos)-4000), expand = c(0,0)) +
+  scale_y_continuous(lim=c(0,1)) +
+  # ggtitle( paste0(unique(subsetSelectedDates$DATE_ACQUIRED))) +
+  labs(x = "Position", y = "Fractions", col = 'outlier') +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        # axis.title.y = element_text(size = 14, face = 'bold'),
+        # axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 15),
+        # legend.position = c(.78, .5),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'),
+        strip.text.x = element_text(size = 14, face = 'bold'))
+
+# ggsave(filename = paste0("./results/temp_maps/", 'Suriname_',reference_date[1], 
+#                          '_alongshore_fractions',
+#                          '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
 
 # plot(rev(mudbanks_selection$pos), rev(mudbanks_selection$mudbank_extent+
 #                                         mudbanks_selection$coast_median),
@@ -282,60 +356,99 @@ first + mudbankPos + outlierPos
 #        legend = c("boundary", "outliers", 'median coastal position'),
 #        col = c('black', 'red', 'blue'),
 #        pt.cex = 2,pch = c(1,1))
+# 
+# allFiles$five_year_col
 
+ggplot(subset(allFiles, mudbank_outlier == 0 & mudbank_extent > 0), 
+       aes(x= pos, y = SmoothedPeakFract)) +  # colour = five_year_col
+  
+  geom_point(size = 1, alpha = 0.1) + # ,
+  # facet_wrap(paste0('~five_year_col')) +
+  geom_smooth(method="lm", col="firebrick", size=2) +
 
-# plot mean fractions
-plot(mudbanks_selection$pos, mudbanks_selection$meanMud,
-     ylim = c(0,1))
-points(subset_for_testPlot$pos[which(subset_for_testPlot$mudbank_outlier >= 1 |
-                                       subset_for_testPlot$mudbank_extent < 0)], 
-       subset_for_testPlot$meanMud[which(subset_for_testPlot$mudbank_outlier >= 1 |
-                                           subset_for_testPlot$mudbank_extent < 0)],
-       col = 'red')
-
-hist(subset_for_testPlot$meanMud,  xlim=c(0,1),
-     breaks = c(seq(floor(min(subset_for_testPlot$meanMud)),ceiling(max(subset_for_testPlot$meanMud)), 0.005)))
+  scale_x_reverse(lim=c(max(subsetSelectedDates$pos)+4000, 
+                        min(subsetSelectedDates$pos)-4000), expand = c(0,0)) +
+  scale_y_continuous(lim=c(0,1)) +
+  # ggtitle( paste0(unique(subsetSelectedDates$DATE_ACQUIRED))) +
+  # labs(x = "Position", y = "Fractions", col = 'outlier') +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        # axis.title.y = element_text(size = 14, face = 'bold'),
+        # axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 15),
+        # legend.position = c(.78, .5),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'),
+        strip.text.x = element_text(size = 14, face = 'bold'))
 
 
 
 # now all obs within a year
 annual_obs <- subset(allFiles,  
-                     as.Date(year_col) == as.Date(paste(years_to_test, 1, 1, sep = "-")) &
+                     as.Date(year_col) == as.Date(paste(2003, 1, 1, sep = "-")) &
                        !(pos %in% posToExclude) &
                        mudbank_outlier == 0 &
                        mudbank_extent > 0)
 annual_obs_outlier <- subset(allFiles,  
-                        as.Date(year_col) == as.Date(paste(years_to_test, 1, 1, sep = "-")) &
+                        as.Date(year_col) == as.Date(paste(2003, 1, 1, sep = "-")) &
                        !(pos %in% posToExclude) &
                        mudbank_outlier > 0)
-
-plot(annual_obs$pos, annual_obs$meanMud)
-points(annual_obs$pos, annual_obs$testSD, col = 'red')
 
 annual_obs <- annual_obs %>%
   dplyr::group_by(pos) %>%
   dplyr::mutate(testMean = mean(meanMud, na.rm = T)) %>%
-  dplyr::mutate(testSD = sd(meanMud, na.rm = T))
+  dplyr::mutate(testSD = sd(meanMud, na.rm = T)) %>%
+  ungroup()
 
+# ggplot idea: https://www.earthdatascience.org/tutorials/visualize-2d-point-density-ggmap/
+pointDensity <- ggplot(annual_obs, aes(x = x, y = y, colour = SmoothedPeakFract)) +
+  geom_point(size = 0.5, alpha = 0.2) +
+  scale_colour_gradient2(low = "#2166ac",
+                         high = "#b2182b",
+                         mid = '#fddbc7', midpoint = 0.4,
+                         na.value = NA,
+                         guide = guide_colourbar(direction = 'horizontal')) +
+  # geom_point(annual_obs2, mapping = aes(x = x, y = y),
+  #            size = 0.5, alpha = 0.1, color = 'red') +
+  coord_equal() +
+  labs(x = "Longitude", y = "Latitude", col = 'Fraction') +
+  # xlab('Longitude') +
+  # ylab('Latitude') +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        # axis.title.y = element_text(size = 14, face = 'bold'),
+        # axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 10),
+        legend.position = c(.48, -.8),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'),
+        strip.text.x = element_text(size = 14, face = 'bold'))
+pointDensity
 
-hist(annual_obs$meanMud,  xlim=c(0,1),
-  breaks = c(seq(floor(min(annual_obs$meanMud)),ceiling(max(annual_obs$meanMud)), 0.01)))
-
+# hist(annual_obs$meanMud,  xlim=c(0,1),
+#   breaks = c(seq(floor(min(annual_obs$meanMud)),ceiling(max(annual_obs$meanMud)), 0.01)))
 
 annual_obs_mean <- subset(allFiles,  
                              as.Date(year_col) == as.Date(paste(years_to_test, 1, 1, sep = "-")) &
                                !(pos %in% posToExclude) &
                                mudbank_outlier == 0 &
                             meanMud < 0.05)
-
-# ggplot idea: https://www.earthdatascience.org/tutorials/visualize-2d-point-density-ggmap/
-# ggplot(annual_obs, aes(x = x, y = y)) +
-#   geom_point(size = 0.5, alpha = 0.1) +
-#   # geom_point(annual_obs2, mapping = aes(x = x, y = y),
-#   #            size = 0.5, alpha = 0.1, color = 'red') +
-#   coord_equal() +
-#   xlab('Longitude') +
-#   ylab('Latitude')
 
 annual_obs_sp <- sp_pnt_ee(annual_obs$x[!is.na(annual_obs$x)],
                            annual_obs$y[!is.na(annual_obs$x)],  
@@ -347,7 +460,7 @@ annual_obs_mean_sp <- sp_pnt_ee(annual_obs_mean$x[!is.na(annual_obs_mean$x)],
                             'high mean mud',
                             "blue")
 
-annual_obs_sp + annual_obs_mean_sp
+# annual_obs_sp + annual_obs_mean_sp
 # calculated mean position to spatial dataset
 meanPos <- SpatialPoints(data.frame(x = annual_obs$distX[complete.cases(annual_obs$distX)],
                                     y =  annual_obs$distY[complete.cases(annual_obs$distY)]),
@@ -381,10 +494,11 @@ test <- unique(Tempcount) %>%
   dplyr::select(!c(CLOUD_COVER, SmoothedPeak, SmoothedPeakFract,areaName, coastDist,
              coastX, coastY, ndwi_threshold, offsetLast, originX, originY,
              bearing, geometry, quarterly_col, date_col, five_year_col,
-             year_col, coast_outlier, locf, deltaCoast, month, day, dateavg))#c(x,y,count, )) %>% # 
-  
+             year_col, coast_outlier, locf, deltaCoast, month, day, dateavg))
 
-plot(test$pos, test$count)
+plot(test$pos, test$mudbankObs)
+
+colnames(Tempcount)
 
 testUniqueCount <- test %>% 
   dplyr::group_by(pos) %>%

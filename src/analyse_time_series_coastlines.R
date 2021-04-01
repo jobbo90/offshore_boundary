@@ -156,7 +156,7 @@ dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
 # properties <- ee_print(image)
 selectImage <- filtCollect$first()
 id <- eedate_to_rdate(selectImage$get("system:time_start"))
-# first <- Map$addLayer(selectImage, visParams,  as.character(as.Date(id)))
+first <- Map$addLayer(selectImage, visParams,  as.character(as.Date(id)))
 
 Map$centerObject(selectImage, 14)
 
@@ -323,8 +323,8 @@ ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized2)) + # color=coast_
 
 
 # select transects of interest
-plot(allFiles_mutate$pos[which(allFiles_mutate$coast_outlier != 0)], 
-     allFiles_mutate$normalized[which(allFiles_mutate$coast_outlier != 0)])
+# plot(allFiles_mutate$pos[which(allFiles_mutate$coast_outlier != 0)], 
+#      allFiles_mutate$normalized[which(allFiles_mutate$coast_outlier != 0)])
 # identify(allFiles_mutate$pos, allFiles_mutate$normalized, n=1, labels=allFiles_mutate$pos)
 
 
@@ -336,7 +336,7 @@ nonOutliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 1)$coast
                          subset(subset2d_for_testPlot, coast_outlier == 1)$coastY,  'nonOutliers',
                          "blue")
 
-coordinatesAOI <- nonOutliers$x$setView[[1]]
+# coordinatesAOI <- nonOutliers$x$setView[[1]]
 
 aoiCollect <- collection$filterBounds(ee$Geometry$Point(
   median(subset(subset2d_for_testPlot, coast_outlier == 1 & coastX != -1)$coastX, na.rm = T),
@@ -354,16 +354,6 @@ firstAOI <- Map$addLayer(imageAOI, visParams,  as.character(as.Date(idAOI)))
 test2 <- firstAOI + nonOutliers + outliers
 setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
         subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
-
-# export it!
-# test2 %>% 
-#   setView(subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
-#           subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 13, options = list()) %>%
-#   mapshot(file = "results/temp_maps/Rplot.png", 
-#           remove_controls = c("zoomControl", "layersControl", "homeButton", "drawToolbar"))
-
-# put this in a function to facilitate creating frames for creating GIF 
-
 
 # plot annual coastline change
 # pre-requisites: 
@@ -504,7 +494,9 @@ p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
         plot.background = element_rect(fill = '#d9d9d9'))
 
 # 'echte' kustlijn gebruiken
-kustlijn <- readOGR('D:/BackUp_D_mangroMud_202001/Site1_Suriname_all/Analysis/IntertidalArea/Coastlines',
+
+
+kustlijn <- readOGR(paste0(wd,'/data/raw/transects'),
                               'class10_line_v5')
 
 shapefile_df <- fortify(kustlijn)
@@ -535,9 +527,6 @@ map_projected <- mapped +
 cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
 # https://stackoverflow.com/questions/54153906/aligning-axes-of-r-plots-on-one-side-of-a-grid-together
 
-
-
-library(cowplot)
 legend <- get_legend(p)
 
 p <- p + theme(legend.position = 'none')
@@ -574,8 +563,6 @@ for( i in unique(allFiles_mutate$year_col)){
   
 }
 
-test<- subset(allFiles_mutate, coast_outlier == 1 & as.Date(year_col) == i)
-# test$negPos
 
 p2 <- ggplot(subset(allFiles_mutate, coast_outlier ==1),
        aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +  # alpha = negPos
@@ -624,18 +611,15 @@ p2
 upper <- p + p2+map_projected +legend+ plot_layout(ncol = 2, nrow = 2, widths = c(1,0.3),
                                      heights = c(1,0.3))
 
-# final <- upper + map_projected + plot_layout(ncol = 2, nrow = 2, heights = c(1,0.3))
-# put the legend of space time plot below the coastline change plot??
-
-
+upper
 
 # http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
-blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
-  cowplot::theme_nothing()
-
-grid.arrange(p, p2,  blankPlot, legend,
-             ncol=2, nrow = 2, 
-             widths = c(2.7, 2.7), heights = c(0.2, 2.5))
+# blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+#   cowplot::theme_nothing()
+# 
+# grid.arrange(p, p2,  map_projected, legend,
+#              ncol=2, nrow = 2, 
+#              widths = c(2.7, 2.7), heights = c(0.2, 2.5))
 
 
 # plot_grid(

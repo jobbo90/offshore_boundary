@@ -47,8 +47,7 @@ source("./src/functions.R")
 
 
 seq2 <- seq(1985, 2020, 1)
-
-years <- c(seq2)# seq(from = 1985, to = 2020, by = 1)
+years <- c(seq2)
 
 # pos to exlcude for mudbank boundary estimates / outlier detection
 posToExclude <- c(seq(138000,147000,1000),
@@ -1259,8 +1258,6 @@ for (i in uniqueDates){
 }
 
 
-subset2d_for_testPlot <- subset(mudbanks3, year_col == c('2018-01-01'))
-
 # do something similar for non-outlier observation count
 mudbanks4 <- mudbanks3 %>%  #  subset2d_for_testPlot %>%
   # distinct(DATE_ACQUIRED, year_col, pos, .keep_all = T) %>% # only unique observations
@@ -1278,9 +1275,9 @@ mudbanks4 <- mudbanks3 %>%  #  subset2d_for_testPlot %>%
                   # mudbank_outlier, validMudbankObs)) %>% # drop the created validObs column from matrix
   ungroup()
 
-# 
-# twoD_pos <- 38000 
-# subset2d_for_testPlot <- subset(mudbanks3, pos == twoD_pos)
+
+# subset2d_for_testPlot <- subset(mudbanks3, year_col == c('2018-01-01'))
+# subset2d_for_testPlot <- subset(mudbanks3, pos == 38000)
 # 
 # plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$axisDist,
 #      xlab="DATE_ACQUIRED", ylab="mudbank Dist [m]",
@@ -1323,7 +1320,7 @@ for (year in unique(format(as.Date(uniqueDates), '%Y'))){
   start_year <- as.Date(ISOdate(year, 1, 1))
   end_year <- as.Date(ISOdate(year, 12, 31)) 
   
-  mudbanks_per_year <-subset(mudbanks3,
+  mudbanks_per_year <-subset(mudbanks4,
                              as.Date(DATE_ACQUIRED) >= start_year &
                              as.Date(DATE_ACQUIRED) <= end_year)
 

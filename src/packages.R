@@ -5,8 +5,9 @@ library(readr)
 library(mapview)
 library(leaflet)
 library(tidyverse)
-library(plyr)
+
 library(dplyr)      # for mutate, such as adding cols
+library(plyr)
 library(stringr)
 library(sp)
 library(rgdal)  # for reading/creating shapefiles
@@ -24,7 +25,8 @@ library(geosphere) # for bearing
 library(scales)   # for squish in ggplot
 library(pointdensityP) # for density estimate
 
-# library(cowplot)
+library(cowplot)
+library(gridExtra) # for grid.arrange
 # library(ggspatial) # for north arrow annotation ggRGB
 # # library(ggtern)
 library(RStoolbox) # for ggRGB
