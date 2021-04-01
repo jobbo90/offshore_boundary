@@ -59,9 +59,9 @@ posToExclude <- c(seq(138000,147000,1000),
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/offshore_points'), full.names = T))
 df <- rewrite(folderSelect);
+
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
-
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
   for (x in seq_along(aoi)){
@@ -87,19 +87,7 @@ allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
                                                               sep = ',', 
                                                               na.strings=c("","NA")
                                                               ))))
-# 
-# allFiles <- allFiles %>% dplyr::mutate(year = year(DATE_ACQUIRED),
-#                                            month = month(DATE_ACQUIRED, label=TRUE),
-#                                            day = day(DATE_ACQUIRED))
 
-# all unique transect (id's)
-allPos <- unique(allFiles[, col_of_interest(allFiles, 'pos$')]);
-uniqueX<- unique(allFiles[, col_of_interest(allFiles, 'originX$')]);
-uniqueY<- unique(allFiles[, col_of_interest(allFiles, 'originY$')]);
-# geo<- unique(allFiles[, col_of_interest(allFiles, '.geo')]);
-
-keep_columns <- colnames(allFiles)#c('axisDist', 'dist_locf', 'distance', 'outlier', 'mudFract',
-                 # 'originX', 'originY')  # necessary for mudbank output
 #'
 #' create an image collection
 #' 
@@ -138,11 +126,9 @@ visParams = list(
   )
 
 #' implement workflow
-#' 1) filter outliers
-#'     - Filter on neighborhood (previous 2, current and next two points)
-#'     Use distance to see if the point is deviating
-#'     Consider using fraction..
-#' 2) Apply douglas pecker algorithm
+#' 1) filter outliers & transects with NO mudbank(see pre-processing)
+#' 2) create annual estimates of mudbank position or mudbank 
+#' 3) alternatively apply douglas pecker algorithm
 #'      - Requires to define subsections (see https://www.tandfonline.com/doi/pdf/10.1559/152304099782424901?casa_token=9wn9uSUp3zYAAAAA:XYDB0pKcZcH69STl6eOAlKoMPEwIbvxtlwUwzZ00q4V-z8yOfAREUCePnd4fiZbS9H2A-woJqt0mIg  )
 #'      to ensure separate mudbanks are recognized
 #'      
@@ -151,92 +137,35 @@ uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 all_years <- unique(allFiles$year_col)
 group_pos <- unique(allFiles$pos)
 
-# allFiles$mudbankObs <- NA
-# allFiles$mudbankObsOutlier <- NA
-
-# get median position for each year
-for(y in 1:length(all_years)){
-  # y <- 4
-  selected_year <- year(all_years[y])
-
-  for (p in 1:length(group_pos)){
-    # p = 230#113
-    position = group_pos[p]
-    # position = 202000
-    
-    subsets <- subset(allFiles, year == selected_year &
-                      pos == position &
-                        mudbank_extent > 0 &
-                        mudbank_outlier == 0) # no outlier
-
-
-    # plot(combinedPnt$pos, combinedPnt$mudbank_extent)
-    
-    # plot(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$axisDist,
-    #      main = paste0('mudbank position position: ',position, ' [m]'),
-    #      ylim = c(min(c(subsets$axisDist, subsets$coastDist)-300, na.rm = T),
-    #           max(c(subsets$axisDist, subsets$coastDist), na.rm = T)),
-    #      xlab = paste0(format(as.Date(selected_year), "%Y")),
-    #      ylab = 'distance from transect origin')
-    # points(as.Date(as.character(subsets$DATE_ACQUIRED)), subsets$coastDist,col = 'red')
-
-    if (nrow(subsets) > 1){
-      
-      # get the coastline distance;
-      # meanCoast <- mean(subsets$coastDist, na.rm = T)
-      # modalCoast <- modal(subsets$coast_median)
-      
-      medianOffshore <- median(subsets$axisDist, na.rm=T)
-      
-      bearing <- median(subsets$bearing)
-      originX <- median(subsets$originX)
-      originY <- median(subsets$originY)
-      
-      # set origin at correct location or add coastline dist to dist of interest?
-      destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
-                                           CRS("+proj=longlat +datum=WGS84")), 
-                             bearing, medianOffshore)
-
-      allFiles[which(row.names(allFiles) %in% row.names(subsets)), 'distX'] <-
-        # pdens$lat[which.max(pdens$count)]
-        destPoint[1]
-      
-      allFiles[which(row.names(allFiles) %in% row.names(subsets)), 'distY'] <-
-        # pdens$lon[which.max(pdens$count)]
-        destPoint[2]
-
-    }
-    
-   
-    
-  }
-}
-
 # plot alongshore variability of mud fractions
 # allFiles$SmoothedPeakFract
 range <- round(quantile(subset(allFiles, 
                                !is.na(SmoothedPeakFract) & 
-                               SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05, 0.99), 
+                               SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
                         na.rm=T), 2)
 
-p <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 ),
-           aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  #y = as.Date(quarterly_col)
-  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
+# alongshore variation of mud fractions
+p <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 &
+                    !(pos %in% posToExclude)),
+           aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
-  scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
-                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
-                       low = "#a50026", high = "#313695", mid = '#f7f7f7',
+  scale_fill_gradient2(limits = c(range[[1]], range[[3]]), 
+                       breaks = c(range[[1]], range[[2]], range[[3]]),
+                       low = "#313695", high ="#a50026", mid = '#f7f7f7',
+                       midpoint = range[[2]],
                        guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
                                                draw.llim = FALSE),
                        oob=squish, na.value = NA) + #"grey50"
   labs(y = 'Date', x = 'position') +
   scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0))  
 
+p
 
 
+nonOutliers <- subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 &
+         !(pos %in% posToExclude))
 
-
-
+# plot(nonOutliers$deltaCoast, nonOutliers$SmoothedPeakFract)
 
 
 # # for testing: set to cloudfree
@@ -289,7 +218,7 @@ outlierPos <- sp_pnt_ee(mudbank_selection_Outlier$x,
                          mudbank_selection_Outlier$y,  'outlier',
                         "orange")
 
-# first + mudbankPos + outlierPos
+first + mudbankPos + outlierPos
 
 
 #'
@@ -403,11 +332,46 @@ annual_obs_outlier <- subset(allFiles,
                        !(pos %in% posToExclude) &
                        mudbank_outlier > 0)
 
+# plot(annual_obs$SmoothedPeakFract, annual_obs$deltaCoast)
+
 annual_obs <- annual_obs %>%
   dplyr::group_by(pos) %>%
   dplyr::mutate(testMean = mean(meanMud, na.rm = T)) %>%
+  dplyr::mutate(smoothedMean = mean(SmoothedPeakFract, na.rm = T)) %>%
   dplyr::mutate(testSD = sd(meanMud, na.rm = T)) %>%
   ungroup()
+
+# alongshore variable coastline change as a result of mud fraction
+ggplot(annual_obs, aes(x = pos, y = deltaCoast, colour = SmoothedPeakFract)) +
+  geom_point(size = 1, alpha =1) +
+  scale_colour_gradient2(low = "#2166ac", high = "#b2182b", mid = '#fddbc7', 
+                         limits = c(0.2, 0.6),
+                         midpoint = 0.4, na.value = NA,
+                         guide = guide_colourbar(direction = 'vertical')) +
+  
+  
+  # 
+  # scale_fill_gradient2(limits = c(range[[1]], range[[3]]), 
+  #                      breaks = c(range[[1]], range[[2]], range[[3]]),
+  #                      low = "#313695", high ="#a50026", mid = '#f7f7f7',
+  #                      midpoint = range[[2]],
+  #                      guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+  #                                              draw.llim = FALSE),
+  #                      oob=squish, na.value = NA) 
+  
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 10),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+
 
 # ggplot idea: https://www.earthdatascience.org/tutorials/visualize-2d-point-density-ggmap/
 pointDensity <- ggplot(annual_obs, aes(x = x, y = y, colour = SmoothedPeakFract)) +
@@ -462,6 +426,63 @@ annual_obs_mean_sp <- sp_pnt_ee(annual_obs_mean$x[!is.na(annual_obs_mean$x)],
                             "blue")
 
 # annual_obs_sp + annual_obs_mean_sp
+
+# subsetPos <- subset(allFiles, pos == 156000)
+# plot(subsetPos$SmoothedPeakFract, subsetPos$deltaCoast)
+
+
+# get median position for each year
+for(y in 1:length(all_years)){
+  # y <- 4
+  selected_year <- year(all_years[y])
+  
+  for (p in 1:length(group_pos)){
+    # p = 230#113
+    position = group_pos[p]
+    # position = 202000
+    
+    subsets <- subset(allFiles, year == selected_year &
+                        pos == position &
+                        mudbank_extent > 0 &
+                        mudbank_outlier == 0) # no outlier
+    if (nrow(subsets) > 1){
+      
+      # get the coastline distance;
+      # meanCoast <- mean(subsets$coastDist, na.rm = T)
+      # modalCoast <- modal(subsets$coast_median)
+      
+      medianOffshore <- median(subsets$axisDist, na.rm=T)
+      
+      bearing <- median(subsets$bearing)
+      originX <- median(subsets$originX)
+      originY <- median(subsets$originY)
+      
+      # set origin at correct location or add coastline dist to dist of interest?
+      destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
+                                           CRS("+proj=longlat +datum=WGS84")), 
+                             bearing, medianOffshore)
+      
+      allFiles[which(row.names(allFiles) %in% row.names(subsets)), 'distX'] <-
+        # pdens$lat[which.max(pdens$count)]
+        destPoint[1]
+      
+      allFiles[which(row.names(allFiles) %in% row.names(subsets)), 'distY'] <-
+        # pdens$lon[which.max(pdens$count)]
+        destPoint[2]
+      
+      allFiles[which(row.names(allFiles) %in% row.names(subsets)), ' medianDist'] <-
+        # pdens$lon[which.max(pdens$count)]
+        medianOffshore
+      
+      
+      
+    }
+    
+    
+    
+  }
+}
+
 # calculated mean position to spatial dataset
 meanPos <- SpatialPoints(data.frame(x = annual_obs$distX[complete.cases(annual_obs$distX)],
                                     y =  annual_obs$distY[complete.cases(annual_obs$distY)]),
@@ -577,22 +598,21 @@ df <- df[grep('.shp', folderSelect, ignore.case = T),]
 
 # or a single file
 allMasPoints <- shapefile(paste0(df[2,]))
-first + mapView(allMasPoints, zcol = "z") + mapView(maxCount_spatial,
-                                                    col.regions = c("yellow")) +
-  mapView(meanPos, col.regions = c("red"), layer.name = 'meanPos' ) +
-  mapView(allObs)
 
-e <- extent(bbox(allMasPoints))
-# e[4] <- 6.2
-# e[1] <- -56
-# e[2] <- -55
-# p <- as(e, 'SpatialPolygons')  
+allMasPointsWGS84 <- spTransform(allMasPoints, CRS("+proj=longlat +datum=WGS84"))
+coordinatesMAS <- coordinates(allMasPointsWGS84)
+coordinatesMAS_sp <- sp_pnt_ee(coordinatesMAS[,1], coordinatesMAS[,2],
+                              'masPoints', "yellow")
 
-# crs(p) <- crs(allMasPoints)
-# mapView(p) + mapView(overPoints)
+maxCount <- SpatialPoints(data.frame(x = testFilter$x,y = testFilter$y),
+                          CRS("+proj=longlat +datum=WGS84"))
 
-# overPoints <- over(allMasPoints,p )
-# overPoints <- point.in.poly(allMasPoints, p)
+maxCount_spatial <- sp_pnt_ee(maxCount$x,maxCount$y,
+                              'density', "yellow")
+
+first + coordinatesMAS_sp
+  
+  
 
 
 # library(geosphere)
