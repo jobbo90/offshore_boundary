@@ -41,8 +41,7 @@ source("./src/packages.R")       # loads up all the packages we need
 # library(rgee)
 # Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
 ee_Initialize()
-# does this work 
-# jup it works
+
 ## ---------------------------
 source("./src/functions.R")
 
