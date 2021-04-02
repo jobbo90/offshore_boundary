@@ -244,7 +244,11 @@ allFiles_mutate <- allFiles_dropPOS %>% dplyr::mutate(year = year(DATE_ACQUIRED)
 allFiles_mutate$normalized <- allFiles_mutate$coastDist - allFiles_mutate$baseline
 allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$baseline2
 
-# test simple 2d plot 
+#################################
+#' 
+#' test simple 2d plot 
+#' 
+#################################
 twoD_pos <- 230000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
@@ -291,43 +295,6 @@ ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=co
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
-
-# plot alongshore variability in coastline position
-# similar to figure by Pieter Augustinus
-# filter outliers!
-ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized2)) + # color=coast_outlier) / deltaCoast / 
-  scale_y_continuous(limits=c(-5000, 5000)) +
-  geom_point(size = 2, alpha = 0.1, # , color = "black"
-             aes(color = five_year_col))  +
-  scale_color_manual(name = "Legend", 
-                     values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
-                     guide = guide_legend(override.aes = list(alpha = 1),
-                                           title = 'cross shore position')) +
-  scale_x_reverse() +   
-  labs(x = "along shore position", y = "Distance coastline position") +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                  vjust = -5), 
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
-  
-
-
-# select transects of interest
-# plot(allFiles_mutate$pos[which(allFiles_mutate$coast_outlier != 0)], 
-#      allFiles_mutate$normalized[which(allFiles_mutate$coast_outlier != 0)])
-# identify(allFiles_mutate$pos, allFiles_mutate$normalized, n=1, labels=allFiles_mutate$pos)
-
-
 outliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 0)$coastX,
                       subset(subset2d_for_testPlot, coast_outlier == 0)$coastY,  'outliers',
                       "red")
@@ -355,13 +322,83 @@ test2 <- firstAOI + nonOutliers + outliers
 setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
         subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
 
-# plot annual coastline change
+
+#################################
+#' 
+#' Alongshore variability in coastline position
+#' 
+#################################
+# similar to figure by Pieter Augustinus
+# filter outliers!
+
+augustinus <- ggplot(allFiles_mutate, mapping = aes(x= pos, y = normalized2)) + # color=coast_outlier) / deltaCoast / 
+  scale_y_continuous(limits=c(-5000, 5000)) +
+  geom_point(size = 2, alpha = 0.1, # , color = "black"
+             aes(color = five_year_col))  +
+  scale_color_manual(name = "Legend", 
+                     values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
+                     guide = guide_legend(override.aes = list(alpha = 1),
+                                           title = 'cross shore position')) +
+  scale_x_reverse() +   
+  labs(x = "along shore position", y = "Distance coastline position") +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+  
+augustinus
+
+# or ty to find differnce in coastline change per position
+facet <- 'five_year_col'
+
+ggplot(allFiles_mutate, mapping = aes(x= pos, y = deltaCoast)) + # color=coast_outlier) / deltaCoast / 
+  scale_y_continuous(limits=c(-500, 500)) +
+  geom_point(size = 2, alpha = 0.1, # , color = "black"
+             aes(color = five_year_col))  +
+  facet_wrap(paste0('~', facet)) +
+  # scale_color_manual(name = "Legend", 
+  #                    values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
+  #                    guide = guide_legend(override.aes = list(alpha = 1),
+  #                                         title = 'cross shore position')) +
+  scale_x_reverse() +   
+  labs(x = "along shore position", y = "coastline change") +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+
+
+
+
+
+#################################
+#' 
+#' annual coastline change for coatline orientation
+#' 
+#################################
+
 # pre-requisites: 
 # groups of angles
-
-# ggplot(data=allFiles_mutate, aes(bearing)) +
-#   geom_histogram(binwidth = 2)
-
 angles <-  c(0,5,10,15,20,180, 290, 
              300, 330, 335, 340, 345, 350, 355, 360)
 
@@ -407,7 +444,6 @@ for(i in seq_len(length(level_order))){
   
 }
 
-#plot bearing over rate of change
 # if facet wrap enabled, per 5 yer timestep
 # per 10 is probably better?
 ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
@@ -441,15 +477,16 @@ ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
   )
 
 
-# Spatio temporal plot:
-# either slope or normalized distance seems to be best / clearest but needs to be checked with full dataset
-# Also deltaCoast requries additional test when median positions are all calculated
-# range <- round(quantile(allFiles_mutate$coast_median,c(0.05, 0.95), na.rm=T))
+
+#################################
+#' 
+#' Hovmoller plots
+#' 
+#################################
+# Spatio temporal variation
+
 range <- round(quantile(allFiles_mutate$slope,c(0.05, 0.95), na.rm=T))
 testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
-
-
-
 
 p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
            aes(x = pos,y = as.Date(year_col), fill=slope))+  #y = as.Date(quarterly_col)
@@ -463,18 +500,6 @@ p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
                        oob=squish, na.value = NA) + #"grey50"
   labs(y = 'Date', x = 'position') +
   scale_x_reverse(lim=c(max(allFiles_mutate$pos)+4000, 0), expand = c(0,0)) + # 
-  # geom_segment(data = data.frame(x = pos, 
-  #                                xend= pos, 
-  #                                y=reference_date,
-  #                                yend=reference_date),
-  #              aes(x=x, y=y, xend=xend, yend=yend),
-  #              linetype="dashed") +
-  # geom_hline(yintercept = reference_date, linetype="dashed") +
-  # geom_segment(y=reference_date, yend = reference_date, linetype="dashed",
-  #              size = 1,
-  #              x=300000, xend=100000) + # doesn't work after applying reverse?
-  # geom_text(aes(max(pos)+1000,reference_date,label = 'reference date'),
-  #           vjust = -2)+
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -486,19 +511,15 @@ p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
         # legend.key = element_rect(fill = NA),
         # legend.text = element_text(size = 15),
-        
         # legend.position = 'none',
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
-# 'echte' kustlijn gebruiken
-
-
+# improve: 'real' coastline 
 kustlijn <- readOGR(paste0(wd,'/data/raw/transects'),
                               'class10_line_v5')
-
 shapefile_df <- fortify(kustlijn)
 
 mapped <- ggplot() +
@@ -515,7 +536,7 @@ mapped <- ggplot() +
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
-        plot.background = element_rect()) # fill = '#d9d9d9'
+        plot.background = element_rect()) 
 
 map_projected <- mapped +
   coord_map() +
