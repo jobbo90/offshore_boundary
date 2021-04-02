@@ -363,8 +363,10 @@ facet <- 'five_year_col'
 
 ggplot(allFiles_mutate, mapping = aes(x= pos, y = deltaCoast)) + # color=coast_outlier) / deltaCoast / 
   scale_y_continuous(limits=c(-500, 500)) +
-  geom_point(size = 2, alpha = 0.1, # , color = "black"
-             aes(color = five_year_col))  +
+  # geom_point(size = 2, alpha = 0.1, # , color = "black"
+  #            aes(color = five_year_col))  +
+  # geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6) +
+  # geom_smooth(method='lm') +
   facet_wrap(paste0('~', facet)) +
   # scale_color_manual(name = "Legend", 
   #                    values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
