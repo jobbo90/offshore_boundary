@@ -723,9 +723,13 @@ mudbanks3 <- mudbanks2 %>%
   # dplyr::select(-ends_with('.1')) # in case the create x,y coordinates were created doubble
   # dplyr::select(mudbankObs) / pull()
 
+# all dates
+uniqueDates <- unique(mudbanks3$DATE_ACQUIRED)
+
+
 for (i in uniqueDates){
   # i <- uniqueDates[486]
-  # i <- uniqueDates[which(uniqueDates == c('2000-06-14'))]
+  # i <- uniqueDates[which(uniqueDates == c('1987-10-26'))]
   # print(i)
   
   # Build image Collection around selected image
@@ -1243,8 +1247,8 @@ for (i in uniqueDates){
   # also here overwrite the amount of observations that are not an outlier
   mudbanks_selection <- mudbanks_selection[-indicesToDrop2, ]
 
-  mudbanks3[unique(rownr), "mudbank_outlier"] <-
-    as.data.frame(mudbanks3[unique(rownr),"mudbank_outlier"])[,1] + 1
+  mudbanks3[unique(rownr[,1]), "mudbank_outlier"] <-
+    as.data.frame(mudbanks3[unique(rownr[,1]),"mudbank_outlier"])[,1] + 1
   
   # non outliers in the original data frame
   # amountObs <- which(mudbanks3$DATE_ACQUIRED == i &
