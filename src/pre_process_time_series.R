@@ -1272,6 +1272,11 @@ mudbanks4 <- mudbanks3 %>%  #  subset2d_for_testPlot %>%
   dplyr::mutate(validMudbankObs = ifelse(axisDist == -1 | mudbank_outlier > 0,  # if nonsense observation or outlier, set to NA
                                      NA, validMudbankObs)) %>%
 
+  # 
+  # plyr::mutate(validObs = ifelse(axisDist == -1 | (!is.na(coastDist) & 
+  #                                                    axisDist < coastDist), 
+                                 # NA, 1))
+  
   dplyr::group_by(year_col, pos) %>%
   dplyr::mutate(validMudbankObs = ifelse(is.na(validMudbankObs), # replace NA with the count for valid obs
                                     Mode(validMudbankObs), validMudbankObs)) %>%

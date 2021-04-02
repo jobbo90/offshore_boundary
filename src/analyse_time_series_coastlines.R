@@ -361,17 +361,14 @@ augustinus
 # or ty to find differnce in coastline change per position
 facet <- 'five_year_col'
 
-ggplot(allFiles_mutate, mapping = aes(x= pos, y = deltaCoast)) + # color=coast_outlier) / deltaCoast / 
+ggplot(subset(allFiles_mutate, coast_outlier ==1), 
+       aes(x= pos, y = deltaCoast, group = as.factor(pos))) + 
   scale_y_continuous(limits=c(-500, 500)) +
-  # geom_point(size = 2, alpha = 0.1, # , color = "black"
-  #            aes(color = five_year_col))  +
-  # geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6) +
+  # geom_point(size = 2, alpha = 0.1,
+             # aes(color = five_year_col))  +
+  geom_boxplot(outlier.colour="black", outlier.shape=NA, width=0.6) +
   # geom_smooth(method='lm') +
   facet_wrap(paste0('~', facet)) +
-  # scale_color_manual(name = "Legend", 
-  #                    values = c('#41b6c4','#f768a1','#dd3497','#ae017e','#7a0177','#99d594','#00441b'),
-  #                    guide = guide_legend(override.aes = list(alpha = 1),
-  #                                         title = 'cross shore position')) +
   scale_x_reverse() +   
   labs(x = "along shore position", y = "coastline change") +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -389,96 +386,82 @@ ggplot(allFiles_mutate, mapping = aes(x= pos, y = deltaCoast)) + # color=coast_o
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
+# lm_eqn <- function(df){
+#   m <- lm(normalized2 ~ pos, df);
+#   eq <- substitute(italic(normalized2) == a + b %.% italic(pos)*","~~italic(r)^2~"="~r2, 
+#                    list(a = format(unname(coef(m)[1]), digits = 2),
+#                         b = format(unname(coef(m)[2]), digits = 2),
+#                         r2 = format(summary(m)$r.squared, digits = 3)))
+#   as.character(as.expression(eq));
+# }
+
+ggplot(subset(allFiles_mutate, coast_outlier ==1), 
+       aes(x= pos, y = normalized2)) + 
+  # scale_y_continuous(limits=c(-500, 500)) +
+  # geom_point(size = 2, alpha = 0.1, aes(color = five_year_col))  +
+  geom_boxplot(outlier.colour="black", outlier.shape=NA, width=0.6) +
+  geom_smooth(method='lm', aes(group = five_year_col, color = five_year_col)) +
+  # geom_text(x = 25, y = 300, label = lm_eqn(subset(allFiles_mutate, coast_outlier ==1)), 
+  #           parse = TRUE) +
+  # stat_poly_eq(formula = my.formula, 
+  #              aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+  #              parse = TRUE) +         
+  facet_wrap(paste0('~', facet)) +
+  scale_x_reverse() +   
+  labs(x = "along shore position", y = "coastline change") +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+# alongshore variability
+posEast <- c(seq(0 ,138000,1000))
+posWest <- c(seq(255000 ,max(allFiles_mutate$pos),1000))
+
+allFiles_mutate$alongshore = c('middle')
+
+allFiles_mutate <- allFiles_mutate %>%
+  dplyr::mutate(alongshore = ifelse(pos %in% posEast, c('east'),alongshore)) %>%
+  dplyr::mutate(alongshore = ifelse(pos %in% posWest, c('west'),alongshore))
 
 
 
-
-#################################
-#' 
-#' annual coastline change for coatline orientation
-#' 
-#################################
-
-# pre-requisites: 
-# groups of angles
-angles <-  c(0,5,10,15,20,180, 290, 
-             300, 330, 335, 340, 345, 350, 355, 360)
-
-angle_group <- unique(cut(allFiles_mutate$bearing, angles))
-allFiles_mutate$angle_group <- cut(allFiles_mutate$bearing,angles)
-
-# epochs: <20000, 2000 - 2010, 2010-2020
-allFiles_mutate$fiveyear <- as.Date(cut(lubridate::date(allFiles_mutate$DATE_ACQUIRED), 
-                              "5 year"))
+# calculate means
+meansOI <- allFiles_mutate %>%
+  dplyr::group_by(alongshore) %>% # , five_year_col -> include in group_by when face wrap is ggplot is used
+  dplyr::summarize(mean=mean(normalized, na.rm = T)) %>%
+  # dplyr::summarize(median=median(normalized, na.rm = T)) %>%
+  ungroup()
 
 
-# exclude river mouth obs
-allFiles_mutate <- subset(allFiles_mutate, !(pos %in% posToExclude))
-
-# For now exlude rediculous large slope values
-allFiles_mutate <- subset(allFiles_mutate, !(slope > 500 |
-                            slope < -500))
-
-xaxis <- 'pos'
-
-# distribution of transect bearings
-ggplot(allFiles_mutate, aes(x=eval(as.name(xaxis)), y = coast_median)) +
-  # facet_wrap(paste0('~', 'fiveyear')) + # labeller = as_labeller(unlist(variable_names))
-  geom_point(aes(colour = factor(fiveyear))) +
-  scale_x_reverse() # west to east orientation
-
-level_order <- c("(180,290]","(290,300]", "(300,330]", 
-                 "(330,335]", "(335,340]", "(340,345]", "(345,350]",
-                 "(350,355]", "(355,360]",
-                 "(0,5]", "(5,10]", "(10,15]", "(15,20]", "(20,180]")
-allFiles_mutate$angle_group<-factor(allFiles_mutate$angle_group, levels=level_order)
-variable_names <- data.frame(matrix(ncol = 3, nrow = 1))
-
-for(i in seq_len(length(level_order))){
-  # i <- 1
-  level_order[i] 
+ggplot(data = subset(allFiles_mutate, coast_outlier ==1), 
+       aes(x=normalized, fill=alongshore)) + 
+  # geom_histogram(binwidth=30, alpha = 0.5) +
+  geom_density(alpha = 0.5) +
+  # facet_wrap(paste0('~', 'five_year_col')) +
+  geom_vline(data = meansOI, aes(xintercept= mean, 
+                                       color=alongshore),
+             linetype="dashed") +
+  scale_y_continuous(limits = c(0, 0.002))
   
-  variable_names[i,1] <- qdapRegex::ex_between(as.character(level_order[i] ), "(", "]")[[1]]
-  variable_names[i,2] <- startNr <- as.numeric(qdapRegex::ex_between(
-    as.character(level_order[i] ), "(", ",")[[1]])
-  variable_names[i,3] <- endNr <- as.numeric(qdapRegex::ex_between(
-    as.character(level_order[i] ), ",", "]")[[1]])
   
-}
 
-# if facet wrap enabled, per 5 yer timestep
-# per 10 is probably better?
-ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
-  facet_wrap(paste0('~', 'fiveyear'), labeller = as_labeller(unlist(unique(allFiles_mutate$fiveyear)))) +
-  geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6) +          # boxplot properties
-  scale_x_discrete(labels=c(variable_names[,1])) +
-  labs(y = "annual rate of change [m/yr]", x ='transect bearing') +
-  theme(
-    axis.line.x = element_line(size = 0.5, colour = "black"),
-    axis.line.y = element_line(size = 0.5, colour = "black"),
-    axis.line = element_line(size=1, colour = "black"),
-    axis.text.x = element_text(color = "grey20", size = 14, hjust = 1, 
-                               face = "bold", angle = 45),
-    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
-    axis.title.x = element_text(size = 18, face = 'bold'),
-    axis.title.y = element_text(size = 18, face = 'bold'),
-    
-    strip.background = element_rect(fill = "white", colour = "white"),
-    legend.key = element_rect(fill = NA),
-    legend.text = element_text(size = 18),
-    # legend.position = c(.9, .8),
-    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
-    
-    panel.border = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    panel.spacing.x = unit(2, 'lines'),
-    
-    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
-  )
-
-
+# ggplot(subset(allFiles_mutate, coast_outlier ==1 &
+#                 (pos %in% posWest)), 
+#        aes(x= normalized2)) + 
+#   geom_histogram(binwidth=30, alpha=.7, fill="#FF6666") +
+#   scale_x_continuous(limits = c(-2000, 2000)) +
+#   geom_vline(aes(xintercept=mean(normalized2, na.rm = T)),
+#              linetype="dashed")
 
 #################################
 #' 
@@ -499,7 +482,7 @@ p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
                        low = "#a50026", high = "#313695", mid = '#f7f7f7',
                         guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
                                                 draw.llim = FALSE),
-                       oob=squish, na.value = NA) + #"grey50"
+                        na.value = NA) + # oob=squish, # squish clamps all values to be within min & max of limits arguments
   labs(y = 'Date', x = 'position') +
   scale_x_reverse(lim=c(max(allFiles_mutate$pos)+4000, 0), expand = c(0,0)) + # 
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -674,7 +657,90 @@ upper
 
 
 
+#################################
+#' 
+#' annual coastline change for coatline orientation
+#' 
+#################################
 
+# pre-requisites: 
+# groups of angles
+angles <-  c(0,5,10,15,20,180, 290, 
+             300, 330, 335, 340, 345, 350, 355, 360)
+
+angle_group <- unique(cut(allFiles_mutate$bearing, angles))
+allFiles_mutate$angle_group <- cut(allFiles_mutate$bearing,angles)
+
+# epochs: <20000, 2000 - 2010, 2010-2020
+allFiles_mutate$fiveyear <- as.Date(cut(lubridate::date(allFiles_mutate$DATE_ACQUIRED), 
+                                        "5 year"))
+
+
+# exclude river mouth obs
+allFiles_mutate <- subset(allFiles_mutate, !(pos %in% posToExclude))
+
+# For now exlude rediculous large slope values
+allFiles_mutate <- subset(allFiles_mutate, !(slope > 500 |
+                                               slope < -500))
+
+xaxis <- 'pos'
+
+# distribution of transect bearings
+ggplot(allFiles_mutate, aes(x=eval(as.name(xaxis)), y = coast_median)) +
+  # facet_wrap(paste0('~', 'fiveyear')) + # labeller = as_labeller(unlist(variable_names))
+  geom_point(aes(colour = factor(fiveyear))) +
+  scale_x_reverse() # west to east orientation
+
+level_order <- c("(180,290]","(290,300]", "(300,330]", 
+                 "(330,335]", "(335,340]", "(340,345]", "(345,350]",
+                 "(350,355]", "(355,360]",
+                 "(0,5]", "(5,10]", "(10,15]", "(15,20]", "(20,180]")
+allFiles_mutate$angle_group<-factor(allFiles_mutate$angle_group, levels=level_order)
+variable_names <- data.frame(matrix(ncol = 3, nrow = 1))
+
+for(i in seq_len(length(level_order))){
+  # i <- 1
+  level_order[i] 
+  
+  variable_names[i,1] <- qdapRegex::ex_between(as.character(level_order[i] ), "(", "]")[[1]]
+  variable_names[i,2] <- startNr <- as.numeric(qdapRegex::ex_between(
+    as.character(level_order[i] ), "(", ",")[[1]])
+  variable_names[i,3] <- endNr <- as.numeric(qdapRegex::ex_between(
+    as.character(level_order[i] ), ",", "]")[[1]])
+  
+}
+
+# if facet wrap enabled, per 5 yer timestep
+# per 10 is probably better?
+ggplot(allFiles_mutate, aes(x=angle_group, y = slope)) +
+  facet_wrap(paste0('~', 'fiveyear'), labeller = as_labeller(unlist(unique(allFiles_mutate$fiveyear)))) +
+  geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6) +          # boxplot properties
+  scale_x_discrete(labels=c(variable_names[,1])) +
+  labs(y = "annual rate of change [m/yr]", x ='transect bearing') +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 14, hjust = 1, 
+                               face = "bold", angle = 45),
+    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.x = element_text(size = 18, face = 'bold'),
+    axis.title.y = element_text(size = 18, face = 'bold'),
+    
+    strip.background = element_rect(fill = "white", colour = "white"),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 18),
+    # legend.position = c(.9, .8),
+    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    
+    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
+  )
 
 
 

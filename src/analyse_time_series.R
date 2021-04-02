@@ -138,14 +138,16 @@ all_years <- unique(allFiles$year_col)
 group_pos <- unique(allFiles$pos)
 
 # plot alongshore variability of mud fractions
-# allFiles$SmoothedPeakFract
+# allFiles$meanMud # SmoothedPeakFract
 range <- round(quantile(subset(allFiles, 
                                !is.na(SmoothedPeakFract) & 
-                               SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
+                                 #allFiles$mudbank_outlier <1 &
+                                 SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
                         na.rm=T), 2)
 
 # alongshore variation of mud fractions
-p <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 &
+p <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 
+                  & #allFiles$mudbank_outlier <1 &
                     !(pos %in% posToExclude)),
            aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
@@ -323,14 +325,18 @@ ggplot(subset(allFiles, mudbank_outlier == 0 & mudbank_extent > 0),
 
 # now all obs within a year
 annual_obs <- subset(allFiles,  
-                     as.Date(year_col) == as.Date(paste(2003, 1, 1, sep = "-")) &
-                       !(pos %in% posToExclude) &
-                       mudbank_outlier == 0 &
-                       mudbank_extent > 0)
+                     as.Date(year_col) == as.Date(paste(2009, 1, 1, sep = "-")) &
+                       !(pos %in% posToExclude))
+
 annual_obs_outlier <- subset(allFiles,  
-                        as.Date(year_col) == as.Date(paste(2003, 1, 1, sep = "-")) &
+                        as.Date(year_col) == as.Date(paste(2009, 1, 1, sep = "-")) &
                        !(pos %in% posToExclude) &
                        mudbank_outlier > 0)
+
+annual_obs$mudbankObs
+annual_obs$validMudbankObs
+
+
 
 # plot(annual_obs$SmoothedPeakFract, annual_obs$deltaCoast)
 
