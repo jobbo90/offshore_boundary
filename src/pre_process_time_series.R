@@ -38,7 +38,6 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
-
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -601,7 +600,7 @@ folderSelect <- as.matrix(list.files(paste0('data/processed/coastlines'), full.n
 df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
-
+# years <- 2009
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
   for (x in seq_along(aoi)){
@@ -660,7 +659,7 @@ mudbanks$SmoothedSlopes <- (mudbanks$SmoothedPeakFract - mudbanks$maxExtentIndex
 
 # Replace Inf with NA
 is.na(mudbanks$SmoothedSlopes) <- do.call(cbind,lapply(mudbanks$SmoothedSlopes, is.infinite))
-mudbanks$mudbankObs <- -1
+mudbanks$mudbankObs <- NA
 
 subset2d_for_testPlot2 <- subset(mudbanks, year_col == c('2018-01-01'))
 
@@ -680,7 +679,6 @@ mudbanks2 <- mudbanks %>% #subset2d_for_testPlot2 %>%
                                     Mode(mudbankObs), mudbankObs)) %>%
   # dplyr::select(c(DATE_ACQUIRED, year_col, pos,axisDist,mudbankObs, coastDist,
                   # validObs)) %>%
-  dplyr::select(!c(validObs)) %>% # drop the created validObs column from matrix
   ungroup()
 
 # reshape mudbanks such that each relative, absolute and slope drop gets it own data-entry for each pos
@@ -1262,27 +1260,35 @@ for (i in uniqueDates){
 }
 
 
+# subsetPos <- mudbanks3[which(mudbanks4$pos == 299000),]
+
 # do something similar for non-outlier observation count
-mudbanks4 <- mudbanks3 %>%  #  subset2d_for_testPlot %>%
-  # distinct(DATE_ACQUIRED, year_col, pos, .keep_all = T) %>% # only unique observations
-  dplyr::group_by(year_col, pos, mudbank_outlier) %>% # group by pos, year and outlier/no outlier
+mudbanks4 <- mudbanks3#subsetPos %>%  #  subset2d_for_testPlot %>%
   
+  dplyr::group_by(pos, year_col, validObs, mudbank_outlier) %>% # group 
   # count observations for validObs = 1 & NA  
-  dplyr::mutate(validMudbankObs = n_distinct(DATE_ACQUIRED)) %>%
-  dplyr::mutate(validMudbankObs = ifelse(axisDist == -1 | mudbank_outlier > 0,  # if nonsense observation or outlier, set to NA
+  dplyr::mutate(validMudbankObs = n_distinct(DATE_ACQUIRED)) %>% # count unique observations
+  # if nonsense observation or outlier, set to NA
+  dplyr::mutate(validMudbankObs = ifelse(axisDist == -1 | mudbank_outlier > 0,  
                                      NA, validMudbankObs)) %>%
 
-  # 
-  # plyr::mutate(validObs = ifelse(axisDist == -1 | (!is.na(coastDist) & 
-  #                                                    axisDist < coastDist), 
-                                 # NA, 1))
-  
   dplyr::group_by(year_col, pos) %>%
-  dplyr::mutate(validMudbankObs = ifelse(is.na(validMudbankObs), # replace NA with the count for valid obs
+  # replace NA with the count for valid obs
+  dplyr::mutate(validMudbankObs = ifelse(is.na(validMudbankObs), 
                                     Mode(validMudbankObs), validMudbankObs)) %>%
   # dplyr::select(c(DATE_ACQUIRED, year_col, pos,axisDist,mudbankObs, coastDist,
-                  # mudbank_outlier, validMudbankObs)) %>% # drop the created validObs column from matrix
+  #                 mudbank_outlier, validObs, validMudbankObs)) %>% 
+  # dplyr::select(!c(validObs)) %>% # drop the created validObs column from matrix
   ungroup()
+
+
+
+# which( mudbanks4$validMudbankObs > mudbanks4$mudbankObs)
+
+# forHist <- mudbanks4$validMudbankObs #mudbanks4$mudbankObs 
+# 
+# hist(forHist,  xlim=c(min(forHist), max(forHist)),
+#   breaks = c(seq(min(forHist),max(forHist), 1)))
 
 
 # subset2d_for_testPlot <- subset(mudbanks3, year_col == c('2018-01-01'))
