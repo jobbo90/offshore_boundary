@@ -470,13 +470,13 @@ ggplot(data = subset(allFiles_mutate, coast_outlier ==1),
 #################################
 # Spatio temporal variation
 
-range <- round(quantile(allFiles_mutate$slope,c(0.05, 0.95), na.rm=T))
+range <- round(quantile(allFiles_mutate$deltaCoast,c(0.05, 0.95), na.rm=T))
 testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
 
 # https://stackoverflow.com/questions/42181331/how-to-specify-alpha-for-both-fill-and-colour-geom-tile
 # see for suggested improvement (scaling alpha)
-p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
-           aes(x = pos,y = as.Date(year_col), fill=slope))+  #y = as.Date(quarterly_col)
+p <-ggplot(subset(allFiles_mutate, !is.na(deltaCoast)),
+           aes(x = pos,y = as.Date(year_col), fill=deltaCoast))+  #y = as.Date(quarterly_col)
   # fill=slope / deltaCoast / normalized / normalized2 / coastDist
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
   scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
