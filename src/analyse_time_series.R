@@ -738,11 +738,11 @@ coordinatesMAS <- coordinates(allMasPointsWGS84)
 coordinatesMAS_sp <- sp_pnt_ee(coordinatesMAS[,1], coordinatesMAS[,2],
                               'masPoints', "#e5f5e0")
 
-maxCount <- SpatialPoints(data.frame(x = testFilter$x,y = testFilter$y),
-                          CRS("+proj=longlat +datum=WGS84"))
-
-maxCount_spatial <- sp_pnt_ee(maxCount$x,maxCount$y,
-                              'density', "yellow")
+# maxCount <- SpatialPoints(data.frame(x = testFilter$x,y = testFilter$y),
+#                           CRS("+proj=longlat +datum=WGS84"))
+# 
+# maxCount_spatial <- sp_pnt_ee(maxCount$x,maxCount$y,
+#                               'density', "yellow")
 
 addComposite + coordinatesMAS_sp + annual_obs_sp + 
   annual_outlierPos + annual_obs_filter_sp + meanPos_sp
