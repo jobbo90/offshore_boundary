@@ -1263,8 +1263,9 @@ for (i in uniqueDates){
 # subsetPos <- mudbanks3[which(mudbanks4$pos == 299000),]
 
 # do something similar for non-outlier observation count
+
 mudbanks4 <- mudbanks3 %>% #subsetPos %>%  #  subset2d_for_testPlot %>%
-  
+
   dplyr::group_by(pos, year_col, validObs, mudbank_outlier) %>% # group 
   # count observations for validObs = 1 & NA  
   dplyr::mutate(validMudbankObs = n_distinct(DATE_ACQUIRED)) %>% # count unique observations
