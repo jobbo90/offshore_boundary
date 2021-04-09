@@ -240,7 +240,6 @@ uniqueDates[which.min(abs(as.Date(uniqueDates) - as.Date("2009-11-3")))]
 reference_date <- as.Date(c("2009-09-12","2009-09-28", "2009-11-07", "2009-11-15")) #as.Date("2003-11-15") 
 subsetSelectedDates <- subset(allFiles, as.Date(DATE_ACQUIRED) %in% reference_date)
 facet <- 'DATE_ACQUIRED'
-subsetSelectedDates$meanMud
 
 alongshoreFracts <- ggplot(subsetSelectedDates, aes(x= pos, y = SmoothedPeakFract,  #meanMud
                                colour = as.factor(mudbank_outlier))) + 
@@ -407,16 +406,16 @@ for(y in 1:length(all_years)){
 #'  for plotting purposes
 #'  
 
-dateForTest <- as.Date("2008-01-01")
+dateForTest <- as.Date("2016-01-01")
 
 # build image collection around that year
 filtCollectAnnual <- collection$filterDate(as.character(dateForTest), 
                                            as.character(dateForTest + 365))
 dates <- ee_get_date_ic(filtCollectAnnual, time_end = FALSE)
 
-medianComp <- filtCollectAnnual$median()
+# medianComp <- filtCollectAnnual$median()
 composite <- ee$Algorithms$Landsat$simpleComposite(filtCollectAnnual)#$uint32
-Map$centerObject(filtCollectAnnual$first(), 14)
+Map$centerObject(filtCollectAnnual$first(), 11)
 addComposite <- Map$addLayer(composite, visParams, paste0('landsat: ',dateForTest))
 
 # now all obs within the selected year
@@ -471,6 +470,10 @@ annual_obs_filter_sp <- sp_pnt_ee(annual_obs_filter$x,
 #'
 #####
 
+kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/transects'),
+                    layer = 'class10_line')
+
+posOfInterest <- 223000
 posToExclude <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
 
@@ -481,6 +484,8 @@ mudbankPressence <- ggplot(subset(allFiles2, !(pos %in% posToExclude)),
   scale_fill_manual(breaks = c("0", "1"),
                     values= c("#ef6548", "#41b6c4"),
                     labels = c('mudbank', 'no mudbank')) +
+  geom_vline(aes(xintercept = posOfInterest), 
+             linetype = "dashed", colour = "red",size = 1) +
 
   scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 
                         min(allFiles2$pos)-4000), expand = c(0,0)) +
@@ -506,13 +511,28 @@ mudbankPressence <- ggplot(subset(allFiles2, !(pos %in% posToExclude)),
         strip.text.x = element_text(size = 14, face = 'bold'))
 # mudbankPressence
 
-kustlijn <- readOGR(paste0(wd,'/data/raw/transects'),
-                    'class10_line_v5')
+# 
+# list.files(paste0(wd,'/data/raw/transects'), pattern='\\class10_line')
+# file.exists(paste0(wd,'/data/raw/transects/class10_line.shp'))
+
 shapefile_df <- fortify(kustlijn)
 
 mapped <- ggplot() +
   geom_path(data = shapefile_df, 
             aes(x = long, y = lat, group = group)) +
+  geom_point(data = subset(allFiles2, (pos %in% posOfInterest)),
+             aes(x=median(originX),  y = median(originY)), colour = 'red', 
+             size = 5) +
+  geom_text() +
+  annotate("text", label = "A", x = -55.5, y = 5.9, size = 6, colour = "red") +
+
+  # geom_label(
+  #   label='A', 
+  #   x=-55.5,
+  #   y=5.8,
+  #   check_overlap = T
+  # ) +
+  
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -542,7 +562,7 @@ cowplot::plot_grid(mudbankPressence, map_projected, align = "v",
 # for now make it a data.frame (required for assigning data)
 # annual_obs_filter <- as.data.frame(annual_obs_filter)
 
-allFiles2$mudbank_outlier
+# allFiles2$mudbank_outlier
 
 # 
 deltaDistr <- ggplot(data = subset(allFiles2, !(pos %in% posToExclude) &
@@ -665,20 +685,6 @@ pointDensity <- ggplot(subset(annual_obs,   # mudbank_outlier == 0 &
 # pointDensity
 
 
-annual_obs_sp <- sp_pnt_ee(annual_obs2$x[!is.na(annual_obs2$x) & annual_obs2$x != -1],
-                           annual_obs2$y[!is.na(annual_obs2$x) & annual_obs2$x != -1],  
-                           'All valid observations',
-                           "orange")
-
-# annual_obs_mean_sp <- sp_pnt_ee(annual_obs2$x[!is.na(annual_obs2$x) & annual_obs2$meanMud],
-#                                 annual_obs2$y[!is.na(annual_obs2$x)],  
-#                                 'high mean mud',
-#                                 "blue")
-
-# annual_obs_sp + annual_obs_mean_sp
-
-
-
 #'
 #' Test Mas observations versus fractions
 #' 
@@ -690,7 +696,8 @@ mas_folder <- 'D:/BackUp_D_mangroMud_202001/Research/External_Data/Spatial/Kustm
 # 31-12-2008 (entire coast of Suriname)
 
 # mas_folder2 <- 'D:/BackUp_D_mangroMud_202001/Research/External_Data/Source/KustmetingMAS_source/shp'
-mas_folder2 <- 'D:/WOTRO/Research/External_Data/Source/KustmetingMAS_source/shp'
+mas_folder2 <- 'D:/WOTRO/Research/External_Data/Spatial/Kustmetingen_MAS/surveys'
+# D:\WOTRO\Research\External_Data\Spatial\Kustmetingen_MAS\surveys
 # relevant file: 2016_west 
 # to lesser extent 2014_oost
 
@@ -722,7 +729,9 @@ df <- df[grep('.shp$', folderSelect, ignore.case = T),]
 # allMasPoints <- do.call(rbind, lapply(as.matrix(filteredMas)[,1], function(x) shapefile(x)))
 
 # or a single file
-allMasPoints <- shapefile(paste0(df[1,]))
+
+# df <- df[grep('2008_', df, ignore.case = T),]
+allMasPoints <- shapefile(paste0(df[24,])) # 23 == 2008 / 24 = 2016
 
 allMasPoints <- spTransform(allMasPoints, CRS = CRS("+init=epsg:32621"))
 coordinatesMasUtm <- coordinates(allMasPoints)
@@ -732,21 +741,17 @@ coordinatesMAS <- coordinates(allMasPointsWGS84)
 coordinatesMAS_sp <- sp_pnt_ee(coordinatesMAS[,1], coordinatesMAS[,2],
                               'masPoints', "#e5f5e0")
 
-
-# maxCount <- SpatialPoints(data.frame(x = testFilter$x,y = testFilter$y),
-#                           CRS("+proj=longlat +datum=WGS84"))
-# 
-# maxCount_spatial <- sp_pnt_ee(maxCount$x,maxCount$y,
-#                               'density', "yellow")
-
-addComposite + coordinatesMAS_sp + annual_obs_sp + annual_mudbankPos +
+addComposite + coordinatesMAS_sp + annual_mudbankPos +
   annual_outlierPos + annual_obs_filter_sp + meanPos_sp
+
+
+hist(allMasPoints$z)
 
 
 # library(geosphere)
 library(rgeos)
 # library(spatialEco)
-library(sp)
+# library(sp)
 
 # get nearest observation for 2005
 annual_obs_nonOutlier_sp <- SpatialPoints(data.frame(x = annual_obs_nonOutlier$x,
@@ -785,7 +790,7 @@ for(pnt in 1:length(annual_obs_nonOutlier_sp_utm)){
              distance = nearest_dist))
 }
 
-filtered <- annual_obs2 %>% distinct(distX, distY, .keep_all = TRUE)
+filtered <- annual_obs %>% distinct(distX, distY, .keep_all = TRUE)
 
 annual_obs_meanPos_sp <- SpatialPoints(data.frame(x = filtered$distX[complete.cases(filtered$distX)],
                                                   y = filtered$distY[complete.cases(filtered$distX)]),
@@ -826,7 +831,8 @@ for(pnt in 1:length(annual_obs_meanPos_sp_utm)){
 # limit allowed distance
 pnts_limitDist <- subset(pnts, distance<1000)
 pnts_boundary_limitDist <- subset(pnts_boundary, distance<2000 & mudFract != -1)
-plot(pnts_limitDist$zMax, pnts_limitDist$mudFract)           
+plot(pnts_limitDist$zMax, pnts_limitDist$mudFract,
+     main = paste0('2008'), xlab = paste0('depth'), ylab = 'fraction')           
 points(pnts_boundary$zMax, pnts_boundary$mudFract, 
        pch = 16, col = 'red')           
 
