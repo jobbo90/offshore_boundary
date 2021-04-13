@@ -297,7 +297,8 @@ annualVariation <- ggplot(AllNonOutliers,
              aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +  # alpha = negPos
   geom_boxplot(aes(fill = as.factor(negPos)),  outlier.shape=NA)+#outlier.colour="black") +          
   scale_fill_manual('mean change', labels = c('negative', 'positive'),
-                    values = c('#7b3294',  "#008837")) +   
+                    values = c('#7b3294',  "#008837"),
+                    guide = guide_legend(reverse=T)) +   
   guides()+
   coord_flip() +
   labs(y ='Coastline Change [m]', y = "") +
@@ -497,14 +498,77 @@ final <- plot_grid(left2, right, align = 'h', ncol = 2,
 
 # final
 
-ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
-                         format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
+#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
 
 
+for (position in posOfInterest){
+  subsetPos <- subset(allFiles2, pos == position)
+  coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
+  
+  # all years considered a mudbank
+  getYears <- unique(subsetPos[subsetPos$noMudbank == 0, 'year_col'])
+  
+  # sequences <- split(as.Date(getYears$year_col), cumsum(c(0, diff(as.Date(getYears$year_col)) == 365)));
+  
+  # drop sublist with only x amount of consequetive mudbank observations
+  # filtSequences <- Filter(function(x){length(x)>3}, sequences)
+  # startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
+  # endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
 
+  dateFrames <- data.frame(id = rep(position, length(getYears$year_col)), 
+                           fill = '#7fbf7b',colour = 'black',
+                           xmin = as.Date(getYears$year_col),
+                           xmax = as.Date(getYears$year_col) + 365,
+                           ymin = coastDistRange[1],
+                           ymax = coastDistRange[2])
+  
+  twoDPlot <- ggplot(subsetPos, 
+                     aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + 
+    geom_rect(data = dateFrames, inherit.aes = FALSE,
+              aes(xmin = xmin, xmax = xmax, ymin = ymin,ymax = ymax, fill = fill),
+              colour = NA) +
+    scale_fill_manual(name = '', values = c('#7fbf7b'), labels = c('mudbank')) +
+    geom_line(inherit.aes = FALSE, aes(x = as.Date(DATE_ACQUIRED), y = coast_median),
+              alpha = 0.9, size = 1.2) +
+    # geom_smooth(inherit.aes = FALSE, aes(x = as.Date(DATE_ACQUIRED), y = coast_median),
+    #           alpha = 0.9, size = 1.2, se = F) +
+    geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
+    scale_y_continuous(limits=c(coastDistRange[1],coastDistRange[2])) +
+    scale_color_manual(name = "Observations",
+                       values = c('red', 'blue'),
+                       labels = c("outlier", "coastal distance")) +
+
+    scale_x_date(labels = date_format("%Y")) +
+    ggtitle( paste0('position: ', position)) +
+    labs(x = "year", y = "Distance coastline position") +
+    theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+          axis.line.y = element_line(size = 0.5, colour = "black"),
+          axis.line = element_line(size= 1, colour = "black"),
+          axis.title.y = element_text(size = 12, face = 'bold'),
+          axis.title.x = element_text(size = 12, face = 'bold'),
+          axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+          axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+          legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+          legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+          legend.text = element_text(size = 12),
+          plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                    vjust = -5), 
+          panel.grid.major = element_blank(), # remove grid lines
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(),
+          plot.background = element_rect(fill = '#d9d9d9'))
+
+  # twoDPlot
+  
+  ggsave(plot = twoDPlot, filename = paste0("./results/temp_maps/", 'Suriname_pos_', position, '_1985_2020_',
+  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+  width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+  
+}
 
 
 
@@ -519,61 +583,3 @@ ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmoll
 
 # 2d dimensional plot corresponding to the point of interest 
 
-subsetPos <- subset(allFiles2, (pos %in% posOfInterest))
-coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
-
-# all years considered a mudbank
-getYears <- unique(subsetPos[subsetPos$noMudbank == 0, 'year_col'])
-
-# sequences <- split(as.Date(getYears$year_col), cumsum(c(0, diff(as.Date(getYears$year_col)) == 365)));
-
-# drop sublist with only x amount of consequetive mudbank observations
-filtSequences <- Filter(function(x){length(x)>3}, sequences)
-
-startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
-endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
-
-dateFrames <- data.frame(id = posOfInterest, fill = NA,
-                         xmin = as.Date(getYears$year_col), 
-                         xmax = as.Date(getYears$year_col) + 365, 
-                         ymin = coastDistRange[1], 
-                         ymax = coastDistRange[2])
-
-
-posToExclude <- c(seq(138000,147000,1000),
-                  seq(241000, 255000, 1000))
-
-twoDPlot <- ggplot(subsetPos, 
-                   aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + 
-  geom_rect(data = dateFrames, inherit.aes = FALSE, 
-            aes(xmin = xmin, xmax = xmax, ymin = ymin,ymax = ymax), 
-            fill = 'grey50', colour = NA) +
-  geom_line(inherit.aes = FALSE, aes(x = as.Date(DATE_ACQUIRED), y = coast_median),
-            alpha = 0.5, size = 1.2) +
-  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
-  scale_y_continuous(limits=c(coastDistRange[1],coastDistRange[2])) +
-  scale_color_manual(name = "Legend",
-                     values = c('red', 'blue'),
-                     labels = c("outlier", "coastal distance")) +
-  scale_x_date(labels = date_format("%Y")) +
-  ggtitle( paste0('position: ', posOfInterest)) +
-  labs(x = "year", y = "Distance coastline position") +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # strip.text.x = element_blank(), # remove ☺panel labels
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        # legend.text = element_text(size = 15),
-        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                  vjust = -5), 
-        # legend.position = c(.78, .5),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
-# twoDPlot
