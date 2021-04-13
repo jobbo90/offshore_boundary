@@ -547,7 +547,7 @@ allFiles_mutate <- allFiles_mutate %>%
   ungroup()
 
 allFiles_mutate$negPos <- 1
-myColors <- c()
+# myColors <- c()
 for( i in unique(allFiles_mutate$year_col)){
   # i <- unique(allFiles$year_col)[29]
   
@@ -560,9 +560,9 @@ for( i in unique(allFiles_mutate$year_col)){
   meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
   # medianVal <- median(annualSubset$deltaCoast, na.rm =T)
  
-  myColors <- c(myColors, ifelse(meanVal>0 , '#2166ac', # blue if positive
-         ifelse(meanVal<0, '#b2182b', # red if negative
-                "grey90")))
+  # myColors <- c(myColors, ifelse(meanVal>0 , '#2166ac', # blue if positive
+  #        ifelse(meanVal<0, '#b2182b', # red if negative
+  #               "grey90")))
   
   if(meanVal < 0){
     print(paste0(i, ': ', meanVal))

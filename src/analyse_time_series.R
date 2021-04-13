@@ -289,7 +289,7 @@ mudbankPos <- sp_pnt_ee(subset(subsetSelectedDates, mudbank_outlier == 0)$x,
 outlierPos <- sp_pnt_ee(subset(subsetSelectedDates, mudbank_outlier == 1)$x,
                         subset(subsetSelectedDates, mudbank_outlier == 1)$y,  'outlier',
                         "orange")
-first + mudbankPos + outlierPos
+# first + mudbankPos + outlierPos
 
 # # For All non outlier observations plot the smoothed peak fraction alongshore
 # ggplot(subset(allFiles, mudbank_outlier == 0 & mudbank_extent > 0),
@@ -464,18 +464,78 @@ annual_obs_filter_sp <- sp_pnt_ee(annual_obs_filter$x,
 # addComposite + annual_mudbankPos + annual_outlierPos + annual_obs_filter_sp + meanPos_sp
 
 
+posOfInterest <- 50000
+subsetPos <- subset(allFiles2, (pos %in% posOfInterest))
+coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
+
+# all years considered a mudbank
+getYears <- unique(subsetPos[subsetPos$noMudbank == 0, 'year_col'])
+
+# sequences <- split(as.Date(getYears$year_col), cumsum(c(0, diff(as.Date(getYears$year_col)) == 365)));
+
+# drop sublist with only x amount of consequetive mudbank observations
+filtSequences <- Filter(function(x){length(x)>3}, sequences)
+
+startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
+endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
+
+dateFrames <- data.frame(id = posOfInterest, fill = NA,
+                         xmin = as.Date(getYears$year_col), 
+                         xmax = as.Date(getYears$year_col) + 365, 
+                         ymin = coastDistRange[1], 
+                         ymax = coastDistRange[2])
+
+
+posToExclude <- c(seq(138000,147000,1000),
+                  seq(241000, 255000, 1000))
+
+twoDPlot <- ggplot(subsetPos, 
+       aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + 
+  geom_rect(data = dateFrames, inherit.aes = FALSE, 
+            aes(xmin = xmin, xmax = xmax, ymin = ymin,ymax = ymax), 
+            fill = 'grey50', colour = NA) +
+  geom_line(inherit.aes = FALSE, aes(x = as.Date(DATE_ACQUIRED), y = coast_median),
+            alpha = 0.5, size = 1.2) +
+  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
+  scale_y_continuous(limits=c(coastDistRange[1],coastDistRange[2])) +
+  scale_color_manual(name = "Legend",
+                     values = c('red', 'blue'),
+                     labels = c("outlier", "coastal distance")) +
+  scale_x_date(labels = date_format("%Y")) +
+  ggtitle( paste0('position: ', posOfInterest)) +
+  labs(x = "year", y = "Distance coastline position") +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove ☺panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.key = element_rect(fill = NA),
+        # legend.text = element_text(size = 15),
+        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
+                                  vjust = -5), 
+        # legend.position = c(.78, .5),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+# twoDPlot
+
+
+
 ####
 #'
-#'
+#' hovmoller plots
 #'
 #####
 
+
+
 kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/transects'),
                     layer = 'class10_line')
-
-posOfInterest <- 223000
-posToExclude <- c(seq(138000,147000,1000),
-                  seq(241000, 255000, 1000))  
 
 mudbankPressence <- ggplot(subset(allFiles2, !(pos %in% posToExclude)),  
                            aes(x = pos,y = as.Date(year_col), 
@@ -558,6 +618,124 @@ cowplot::plot_grid(mudbankPressence, map_projected, align = "v",
 # ggsave(filename = paste0("./results/temp_maps/", 'Suriname_mudbanks_1985_2020_',  
 #                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+breaks <- seq(0, max(allFiles2$pos), 10000)
+posLabel <- rollmean(breaks, 2) # set label to middle point of the aggregated groups
+
+allFiles2 <- allFiles2 %>%
+  #group_by(year_col) %>%
+  dplyr::mutate(newPos =cut(pos,breaks, right = FALSE, labels = posLabel)) %>%
+  # dplyr::select(DATE_ACQUIRED, year_col, pos,newPos) %>%
+  ungroup()
+
+aggregatedPos <- ggplot(allFiles2, #coast_outlier ==1
+             aes(x=newPos, y = deltaCoast)) +  # alpha = negPos
+  geom_boxplot(outlier.shape=NA)+#aes(fill = as.factor(negPos))        
+  # scale_fill_manual('mean change', labels = c('neg', 'pos'),
+                    # values = c("#b2182b", '#2166ac')) +
+  # guides()
+  labs(y = 'Coastline Change [m]', x = "alongshore distance") +
+  scale_y_continuous(limits=c(-500,500)) +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_blank(),#element_line(size = 0.5, colour = "black"),
+    # axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 12, hjust = .5, vjust = .5, angle = 45, face = "bold",),
+    # axis.text.y = element_blank(),#element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    # axis.title.y = element_blank(), #element_text(size = 18, face = 'bold'),
+    
+    strip.background = element_rect(fill = "white", colour = "white"),
+    legend.key = element_rect(fill = NA),
+    # legend.text = element_text(size = 18),
+    legend.position = 'none',  #c(.9, .8),
+    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    
+    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
+    
+  )
+# aggregatedPos
+
+
+# rectangles <- data.frame(xmin = c(20000,200000), xmax= c(30000, 300000), id = 'subtidal', # pos[start] # pos[end]
+#                          ymin = as.Date('2009-07-01'),ymax = as.Date('2010-06-30'),
+#                           fill = 'yellow')
+rectangles <- data.frame(id = character(),fill =  character(),
+                                 xmin = double(), xmax = double(), 
+                                 ymin = double(), ymax = double())
+for(yr in all_years){
+  # print(yr)
+  allObs <- subset(allFiles2, year_col == yr & !(pos %in% posToExclude) &
+                     noMudbank == 0) 
+  # all posiotions considered a mudbank during given year
+  getPos <- unique(allObs$pos)
+  
+  # sequences <- rle(getPos/1000)
+  sequences <- split(getPos, cumsum(c(0, diff(getPos) > 1000)));
+  
+  # drop sublist with only x amount of consequetive mudbank observations
+  filtSequences <- Filter(function(x){length(x)>3}, sequences)
+ 
+  startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
+  endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
+  
+  rectangles <- rbind(rectangles, data.frame(id = yr,fill = NA,
+                                             xmin = startPos, xmax = endPos, 
+                                             ymin = as.Date(yr)-184, 
+                                             ymax = as.Date(yr)+181))
+  
+}
+
+
+# 
+# Spatio temporal variation
+range <- round(quantile(allFiles2$deltaCoast,c(0.05, 0.95), na.rm=T))
+
+p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),#& year_col %in% c('2010-01-01', '2011-01-01')
+           aes(x = pos,y = as.Date(year_col), fill=deltaCoast))+  #y = as.Date(quarterly_col)
+  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
+
+  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
+
+  scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
+                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+                       low = "#a50026", high = "#313695", mid = '#f7f7f7',
+                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+                                               draw.llim = FALSE),
+                       na.value = NA, oob=squish) + # oob=squish, # squish clamps all values to be within min & max of limits arguments
+  geom_rect(data = rectangles, inherit.aes = FALSE, # subset(rectangles, id %in% c('2010-01-01', '2011-01-01'))
+            aes(xmin = xmin, xmax = xmax,
+                ymin = ymin,
+                ymax = ymax), fill = NA, colour = 'black') +
+  
+  # annotate(geom = 'raster', x = rectangles$xmin, y = rectangles$ymax, 
+  #          fill = scales::colour_ramp(c("black", "white")))
+  # 
+  labs(y = 'Date', x = 'position') +
+  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0)) + # 
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        # strip.text.x = element_blank(), # remove panel labels
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.key = element_rect(fill = NA),
+        # legend.text = element_text(size = 15),
+        # legend.position = 'none',
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+p
 
 # for now make it a data.frame (required for assigning data)
 # annual_obs_filter <- as.data.frame(annual_obs_filter)
