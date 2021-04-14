@@ -331,6 +331,9 @@ for(i in group_dates){
     # slope is only applicable if quality of coastline estimate is 
     # sufficient (see landsat 7 case with no data in wetland areas)
     # if outlier detection is sufficient the slope can be correctly estimated
+    # consider using mean-kendall-trend test that corrects for outliers in the trend
+    # detection https://www.statisticshowto.com/mann-kendall-trend-test/
+    # not sure if that would work though
     
     
     # if  there is insufficient observations;
