@@ -152,12 +152,12 @@ range <- round(quantile(subset(allFiles,
                                  #allFiles$mudbank_outlier <1 &
                                  SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
                         na.rm=T), 2)
-
+# unique(allFiles$quarterly_col)
 # alongshore variation of mud fractions
 hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 
                   & #allFiles$mudbank_outlier <1 &
                     !(pos %in% posToExclude)),
-           aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  
+           aes(x = pos,y = as.Date(quarterly_col), fill=SmoothedPeakFract))+  
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
   scale_fill_gradient2(limits = c(range[[1]], range[[3]]), 
                        breaks = c(range[[1]], range[[2]], range[[3]]),
@@ -167,14 +167,28 @@ hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFrac
                                                draw.llim = FALSE),
                        oob=squish, na.value = NA) + #"grey50"
   labs(y = 'Date', x = 'position') +
-  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0))  
+  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0)) +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 12, face = 'bold'),
+        axis.title.x = element_text(size = 12, face = 'bold'),#element_blank(), #element_text(size = 14, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 12),
+        # legend.position = 'none',
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+hovmoller
 
-# hovmoller
-nonOutliers <- subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 &
-         !(pos %in% posToExclude))
-
-
-
+# ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_quarterly_1985_2020_',
+                         # format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+       # width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 #'
 #' 
@@ -245,8 +259,8 @@ for(y in 1:length(all_years)){
   rectangles <- rbind(rectangles, data.frame(id = selected_year,fill = 'black',
                                              colour = 'black',
                                              xmin = startPos, xmax = endPos, 
-                                             ymin = as.Date(selected_year)-184, 
-                                             ymax = as.Date(selected_year)+181))
+                                             ymin = as.Date(selected_year)-184, # the geom_tiles per year have first of januari each year as midpoint  
+                                             ymax = as.Date(selected_year)+181)) # so to have years overlapping this needs to be adjusted.
   
   # get mean coastal change for given year
   # hist(unlist(annualSubset[which(annualSubset$deltaCoast != 0), 'deltaCoast']))
@@ -387,6 +401,9 @@ p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
 
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
 
+  # resolve here that values larger than the range are indicated in the colourbar 
+  # now it reads as if the largest value is -125m/yr where as actually there is locations that
+  # have larger values.
   scale_fill_gradient2(name = 'change [m/yr] \n',limits = c(range[[1]],range[[2]]), 
                        breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
                        low = '#7b3294', high = "#008837", mid = '#f7f7f7', # "#a50026" , "#313695"
