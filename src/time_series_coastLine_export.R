@@ -200,7 +200,7 @@ bbox_buf <- spTransform(bbox_buf, CRS("+proj=longlat +datum=WGS84"))
 ext <- extent(bbox_buf)
 
 # 
-expcrsL5 <- collectionL5$select('B3')$first()$projection()$crs()$getInfo()
+# expcrsL5 <- collectionL5$select('B3')$first()$projection()$crs()$getInfo()
 expcrs <- collection$select('B3')$first()$projection()$crs()$getInfo()
 expextent <- ee$Geometry$LinearRing(list(c(ext@xmin, ext@ymin), c(ext@xmax, ext@ymin), 
                                         c(ext@xmax, ext@ymax), c(ext@xmin, ext@ymax), c(ext@xmin, ext@ymin)), 
@@ -223,7 +223,6 @@ ic_names <- aoiCollect %>%
 
 # names <- img$bandNames()$getInfo()
 export_bands = c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2")
-
 
 opt_selectorsL5 <- c("B1","B2", "B3", "B4", "B5", "B7")
 opt_namesL5 <- c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2" )
