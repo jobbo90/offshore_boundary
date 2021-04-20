@@ -661,6 +661,7 @@ mudbanks$SmoothedSlopes <- (mudbanks$SmoothedPeakFract - mudbanks$maxExtentIndex
   (mudbanks$SmoothedPeak -  mudbanks$maxExtent) * 10000
 
 # Replace Inf with NA
+# what are inf and -inf comming from deviding by ~zero?
 is.na(mudbanks$SmoothedSlopes) <- do.call(cbind,lapply(mudbanks$SmoothedSlopes, is.infinite))
 mudbanks$mudbankObs <- NA
 
