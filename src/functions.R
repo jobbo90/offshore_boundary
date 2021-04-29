@@ -680,5 +680,12 @@ facet_wrap_custom <- function(..., scale_overrides = NULL) {
 #     scale_override(6, scale_x_continuous(breaks = c(17800, 17900)))
 #   ))
 
+n_fun <- function(x){
+  
+  # x1 <- runif(1, 1, 5)
+  return(data.frame(y = max(x, na.rm = T) + 10,
+                    label = paste0(length(x))))
+}
+
 
 
