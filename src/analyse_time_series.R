@@ -144,57 +144,6 @@ uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 all_years <- unique(allFiles$year_col)
 group_pos <- unique(allFiles$pos)
 
-# plot alongshore variability of mud fractions
-# allFiles$meanMud # SmoothedPeakFract
-range <- round(quantile(subset(allFiles, 
-                               !is.na(SmoothedPeakFract) & 
-                                 #allFiles$mudbank_outlier <1 &
-                                 SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
-                        na.rm=T), 2)
-
-# alongshore variation of mud fractions
-hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 
-                  & #allFiles$mudbank_outlier <1 &
-                    !(pos %in% posToExclude)),
-           aes(x = pos,y = as.Date(year_col), fill=SmoothedPeakFract))+  
-  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
-  scale_fill_gradient2(limits = c(range[[1]], range[[3]]), 
-                       breaks = c(range[[1]], range[[2]], range[[3]]),
-                       low = "#313695", high ="#a50026", mid = '#f7f7f7',
-                       midpoint = range[[2]],
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       oob=squish, na.value = NA) + #"grey50"
-  labs(y = 'Date', x = 'position') +
-  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0))  
-
-# hovmoller
-
-
-nonOutliers <- subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 &
-         !(pos %in% posToExclude))
-
-# plot(nonOutliers$deltaCoast, nonOutliers$SmoothedPeakFract)
-
-
-# # for testing: set to cloudfree
-# cloudFree <- ee$Image(collection$filter(ee$Filter$lt("CLOUD_COVER", 30))$
-#                         filterDate(as.character(as.Date(min(uniqueDates))-1), as.character(as.Date(max(uniqueDates))+1))$
-#                         sort("CLOUD_COVER")$first()) #
-# 
-# 
-# filtCollect <- collection$filterDate(as.character(reference_date-20), as.character(reference_date+20))$
-#   sort("CLOUD_COVER")$first()
-# 
-# id <- as.Date(eedate_to_rdate(filtCollect$get("system:time_start")))
-
-# or get around a reference date
-# test <- which.min(abs(as.Date(uniqueDates) - reference_date))
-# uniqueDates <- uniqueDates[1:length(uniqueDates) == test]
-
-# good dates: 2017-09-02, "2018-02-27", 2018-08-28, 2018-09-27
-
-
 # plot one example
 reference_date <- as.Date("2009-09-12") #as.Date("2003-11-15") # uniqueDates[150]
 years_to_test <- year(reference_date)
@@ -237,44 +186,43 @@ first + mudbankPos + outlierPos
 
 uniqueDates[which.min(abs(as.Date(uniqueDates) - as.Date("2009-11-3")))]
 
-reference_date <- as.Date(c("2009-09-12","2009-09-28", "2009-11-07", "2009-11-15")) #as.Date("2003-11-15") 
+reference_date <- as.Date(c("2009-09-12")) #as.Date("2003-11-15") 
 subsetSelectedDates <- subset(allFiles, as.Date(DATE_ACQUIRED) %in% reference_date)
 facet <- 'DATE_ACQUIRED'
 
 alongshoreFracts <- ggplot(subsetSelectedDates, aes(x= pos, y = SmoothedPeakFract,  #meanMud
                                colour = as.factor(mudbank_outlier))) + 
   
-  geom_point(size = 3, alpha = 0.6) + # ,
-  geom_smooth(method='lm') +
+  geom_point(size = 3) + # ,
+  # geom_smooth(method='lm') +
   # geom_point(aes(x= pos, y = meanMud, colour = as.factor(mudbank_outlier)),
   #            size = 3, alpha = 0.6, colour = 'black') +
   facet_wrap(paste0('~', facet), ncol = 1) + # , labeller = as_labeller(unlist(variable_names))
-  # scale_color_manual(labels = c("non-outlier","outlier"), values = c("blue", "red")) +
+  scale_color_manual(labels = c("Mudbank","No mudbank"), values = c("blue", "red")) +
   # guides(color=guide_legend("my title")) +
   scale_x_reverse(lim=c(max(subsetSelectedDates$pos)+4000, 
                         min(subsetSelectedDates$pos)-4000), expand = c(0,0)) +
   scale_y_continuous(lim=c(0,1)) +
-  # ggtitle( paste0(unique(subsetSelectedDates$DATE_ACQUIRED))) +
-  labs(x = "Position", y = "Fractions", col = 'outlier') +
+  labs(x = "Position", y = "Fractions", col = ' ') +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
-        # axis.title.y = element_text(size = 14, face = 'bold'),
-        # axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # strip.text.x = element_blank(), # remove panel labels
+        axis.title.y = element_text(size = 18, face = 'bold'),
+        axis.title.x = element_text(size = 18, face = 'bold'),
+        axis.text.x = element_text(size = 14,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 14, hjust = .5, vjust = .5),
         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
         legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 15),
-        # legend.position = c(.78, .5),
+        legend.text = element_text(size = 16),
+        legend.position = c(.8, .2),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'),
-        strip.text.x = element_text(size = 14, face = 'bold'))
+        # plot.background = element_rect(fill = '#d9d9d9'),
+        strip.text.x = element_text(size = 14, face = 'bold'),
+        strip.background = element_rect(fill = NA, colour = NA)) # "#d9d9d9"
 
-# alongshoreFracts
+alongshoreFracts
 
 # ggsave(filename = paste0("./results/temp_maps/", 'Suriname_',reference_date[1], 
 #                          '_alongshore_fractions',
@@ -290,38 +238,6 @@ outlierPos <- sp_pnt_ee(subset(subsetSelectedDates, mudbank_outlier == 1)$x,
                         subset(subsetSelectedDates, mudbank_outlier == 1)$y,  'outlier',
                         "orange")
 # first + mudbankPos + outlierPos
-
-# # For All non outlier observations plot the smoothed peak fraction alongshore
-# ggplot(subset(allFiles, mudbank_outlier == 0 & mudbank_extent > 0),
-#        aes(x= pos, y = SmoothedPeakFract)) +  # colour = five_year_col
-# 
-#   geom_point(size = 1, alpha = 0.1) + # ,
-#   # facet_wrap(paste0('~five_year_col')) +
-#   geom_smooth(method="lm", col="firebrick", size=2) +
-# 
-#   scale_x_reverse(lim=c(max(subsetSelectedDates$pos)+4000,
-#                         min(subsetSelectedDates$pos)-4000), expand = c(0,0)) +
-#   scale_y_continuous(lim=c(0,1)) +
-#   # ggtitle( paste0(unique(subsetSelectedDates$DATE_ACQUIRED))) +
-#   # labs(x = "Position", y = "Fractions", col = 'outlier') +
-#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-#         axis.line.y = element_line(size = 0.5, colour = "black"),
-#         axis.line = element_line(size= 1, colour = "black"),
-#         # axis.title.y = element_text(size = 14, face = 'bold'),
-#         # axis.title.x = element_text(size = 14, face = 'bold'),
-#         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-#         # strip.text.x = element_blank(), # remove panel labels
-#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-#         legend.key = element_rect(fill = NA),
-#         legend.text = element_text(size = 15),
-#         # legend.position = c(.78, .5),
-#         panel.grid.major = element_blank(), # remove grid lines
-#         panel.grid.minor = element_blank(),
-#         panel.background = element_blank(),
-#         plot.background = element_rect(fill = '#d9d9d9'),
-#         strip.text.x = element_text(size = 14, face = 'bold'))
-
 
 # adding a indicaiton of noMudbank positions (so all observations on that POS recieve 1)
 # only when at least 50%? of observation in a pos is a mudbank
@@ -462,8 +378,6 @@ annual_obs_filter_sp <- sp_pnt_ee(annual_obs_filter$x,
                                   'filtered', "red")
 
 # addComposite + annual_mudbankPos + annual_outlierPos + annual_obs_filter_sp + meanPos_sp
-
-
 posOfInterest <- 50000
 subsetPos <- subset(allFiles2, (pos %in% posOfInterest))
 coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
@@ -528,53 +442,12 @@ twoDPlot <- ggplot(subsetPos,
 
 ####
 #'
-#' hovmoller plots
+#' overview plots
 #'
 #####
 
-
-
 kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/transects'),
                     layer = 'class10_line')
-
-mudbankPressence <- ggplot(subset(allFiles2, !(pos %in% posToExclude)),  
-                           aes(x = pos,y = as.Date(year_col), 
-                                             fill=as.factor(noMudbank))) +
-  geom_tile(na.rm = TRUE) + # color= "white",size=0.1,
-  scale_fill_manual(breaks = c("0", "1"),
-                    values= c("#ef6548", "#41b6c4"),
-                    labels = c('mudbank', 'no mudbank')) +
-  geom_vline(aes(xintercept = posOfInterest), 
-             linetype = "dashed", colour = "red",size = 1) +
-
-  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 
-                        min(allFiles2$pos)-4000), expand = c(0,0)) +
-  
-  # ggtitle( paste0(unique(subsetSelectedDates$DATE_ACQUIRED))) +
-  labs(x = "Position", y = "date", fill = '') +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        # axis.title.y = element_text(size = 14, face = 'bold'),
-        # axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # strip.text.x = element_blank(), # remove panel labels
-        legend.title = element_blank(),
-        legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 15),
-        # legend.position = c(.78, .5),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'),
-        strip.text.x = element_text(size = 14, face = 'bold'))
-# mudbankPressence
-
-# 
-# list.files(paste0(wd,'/data/raw/transects'), pattern='\\class10_line')
-# file.exists(paste0(wd,'/data/raw/transects/class10_line.shp'))
-
 shapefile_df <- fortify(kustlijn)
 
 mapped <- ggplot() +
@@ -584,15 +457,6 @@ mapped <- ggplot() +
              aes(x=median(originX),  y = median(originY)), colour = 'red', 
              size = 5) +
   geom_text() +
-  annotate("text", label = "A", x = -55.5, y = 5.9, size = 6, colour = "red") +
-
-  # geom_label(
-  #   label='A', 
-  #   x=-55.5,
-  #   y=5.8,
-  #   check_overlap = T
-  # ) +
-  
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -612,13 +476,6 @@ map_projected <- mapped +
                      expand = c(0,0))#, limits=c(0,30000),)
 
 
-cowplot::plot_grid(mudbankPressence, map_projected, align = "v", 
-                   axis = "lr", ncol =1, rel_heights = c(1, 0.3))
-
-# ggsave(filename = paste0("./results/temp_maps/", 'Suriname_mudbanks_1985_2020_',  
-#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-
 breaks <- seq(0, max(allFiles2$pos), 10000)
 posLabel <- rollmean(breaks, 2) # set label to middle point of the aggregated groups
 
@@ -628,128 +485,104 @@ allFiles2 <- allFiles2 %>%
   # dplyr::select(DATE_ACQUIRED, year_col, pos,newPos) %>%
   ungroup()
 
-aggregatedPos <- ggplot(allFiles2, #coast_outlier ==1
-             aes(x=newPos, y = deltaCoast)) +  # alpha = negPos
-  geom_boxplot(outlier.shape=NA)+#aes(fill = as.factor(negPos))        
-  # scale_fill_manual('mean change', labels = c('neg', 'pos'),
-                    # values = c("#b2182b", '#2166ac')) +
-  # guides()
-  labs(y = 'Coastline Change [m]', x = "alongshore distance") +
-  scale_y_continuous(limits=c(-500,500)) +
+# dplyr::select(year_col, pos, mudbank_outlier, axisDist, noMudbank) 
+
+
+# attampt at quantifying accretion/erosion for absence/pressence mudbanks.
+allFiles2 <- allFiles %>% # annual_obs %>%
+  group_by(year_col, pos) %>%
+  dplyr::mutate(
+    noMudbank = case_when(
+      validMudbankObs/mudbankObs > 0.6 ~ 0, 
+      TRUE ~ 1)) %>% 
+  
+  ungroup()
+
+# remove duplicate observations to have accurate stats
+allFiles3 <- allFiles2 %>% 
+  group_by(as.Date(DATE_ACQUIRED), pos) %>% 
+  # filter(n()>1) %>% 
+  filter(row_number(pos) == 1) %>%
+  ungroup()
+
+
+# boxp & violin plot
+violinBox <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 &(deltaCoast < -30 | deltaCoast > 30)), #  
+       aes(x=as.numeric(deltaCoast), y = as.factor(noMudbank))) +  # , fill=as.factor(noMudbank)
+  geom_violin(aes(fill = as.factor(noMudbank)), adjust = 1, alpha = 0.6) +
+  # stat_summary(fun.x = median, geom="errorbar", width = 1, linetype = 'dashed',
+               # aes(ymax = ..y.., ymin = ..y..)) +
+  geom_boxplot(width=0.1, outlier.shape=NA) +
+  scale_x_continuous(limits=c(-750, 750)) +
+  geom_vline(xintercept = 0) +
+  # scale_y_discrete(labels = c('Mudbank', 'No mudbank'))+
+  scale_fill_manual(labels = c('Mudbank', 'No mudbank'), values = c('red', 'blue')) +
+  facet_wrap(~five_year_col, ncol = 2) +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
-    axis.line.y = element_blank(),#element_line(size = 0.5, colour = "black"),
-    # axis.line = element_line(size=1, colour = "black"),
-    axis.text.x = element_text(color = "grey20", size = 12, hjust = .5, vjust = .5, angle = 45, face = "bold",),
-    # axis.text.y = element_blank(),#element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.text.y =  element_blank(),# element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_blank(),
     axis.title.x = element_text(size = 14, face = 'bold'),
-    # axis.title.y = element_blank(), #element_text(size = 18, face = 'bold'),
-    
-    strip.background = element_rect(fill = "white", colour = "white"),
+
+    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.key = element_rect(fill = NA),
-    # legend.text = element_text(size = 18),
-    legend.position = 'none',  #c(.9, .8),
-    legend.title = element_text(colour = 'black', size = 20, face = 'bold'),
+    legend.text = element_text(size = 12),#element_blank(),
+    legend.title =  element_blank(),
+    legend.position = c(.8, .1),
     
     panel.border = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     panel.background = element_blank(),
     panel.spacing.x = unit(2, 'lines'),
+    strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
+    strip.text.x = element_text(size = 12), # Facet titles
+    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+
+# ggsave(violinBox, filename = paste0("./results/temp_maps/", 'variabilityDeltaCoast_violin_boxplot_all_values',
+#                          '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+
+# denisty plot  
+density_mudbank <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 &(deltaCoast < -30 | deltaCoast > 30)), 
+       aes(x=deltaCoast, fill=as.factor(noMudbank))) +  # 
+  geom_density(adjust = 1, alpha = 0.5) +
+  # geom_histogram(position = 'identity', binwidth = 25, alpha = 0.5) +
+  scale_x_continuous(limits=c(-750, 750)) +
+  # 0 = mudbank, 1 = no mudbank
+  scale_fill_manual(labels = c('Mudbank', 'No mudbank'), values = c('#F8766D', '#00BFC4')) +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.title.x = element_text(size = 14, face = 'bold'),
     
-    strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
+    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 16),#element_blank(),
+    legend.title =  element_blank(),
+    legend.position = c(.8, .5),
     
-  )
-# aggregatedPos
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
+    strip.text.x = element_text(size = 12), # Facet titles
+    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+density_mudbank
 
-
-# rectangles <- data.frame(xmin = c(20000,200000), xmax= c(30000, 300000), id = 'subtidal', # pos[start] # pos[end]
-#                          ymin = as.Date('2009-07-01'),ymax = as.Date('2010-06-30'),
-#                           fill = 'yellow')
-rectangles <- data.frame(id = character(),fill =  character(),
-                                 xmin = double(), xmax = double(), 
-                                 ymin = double(), ymax = double())
-for(yr in all_years){
-  # print(yr)
-  allObs <- subset(allFiles2, year_col == yr & !(pos %in% posToExclude) &
-                     noMudbank == 0) 
-  # all posiotions considered a mudbank during given year
-  getPos <- unique(allObs$pos)
-  
-  # sequences <- rle(getPos/1000)
-  sequences <- split(getPos, cumsum(c(0, diff(getPos) > 1000)));
-  
-  # drop sublist with only x amount of consequetive mudbank observations
-  filtSequences <- Filter(function(x){length(x)>3}, sequences)
- 
-  startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
-  endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
-  
-  rectangles <- rbind(rectangles, data.frame(id = yr,fill = NA,
-                                             xmin = startPos, xmax = endPos, 
-                                             ymin = as.Date(yr)-184, 
-                                             ymax = as.Date(yr)+181))
-  
-}
-
-
-# 
-# Spatio temporal variation
-range <- round(quantile(allFiles2$deltaCoast,c(0.05, 0.95), na.rm=T))
-
-p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),#& year_col %in% c('2010-01-01', '2011-01-01')
-           aes(x = pos,y = as.Date(year_col), fill=deltaCoast))+  #y = as.Date(quarterly_col)
-  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
-
-  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
-
-  scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
-                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
-                       low = "#a50026", high = "#313695", mid = '#f7f7f7',
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       na.value = NA, oob=squish) + # oob=squish, # squish clamps all values to be within min & max of limits arguments
-  geom_rect(data = rectangles, inherit.aes = FALSE, # subset(rectangles, id %in% c('2010-01-01', '2011-01-01'))
-            aes(xmin = xmin, xmax = xmax,
-                ymin = ymin,
-                ymax = ymax), fill = NA, colour = 'black') +
-  
-  # annotate(geom = 'raster', x = rectangles$xmin, y = rectangles$ymax, 
-  #          fill = scales::colour_ramp(c("black", "white")))
-  # 
-  labs(y = 'Date', x = 'position') +
-  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0)) + # 
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # strip.text.x = element_blank(), # remove panel labels
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        # legend.text = element_text(size = 15),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
-p
-
-# for now make it a data.frame (required for assigning data)
-# annual_obs_filter <- as.data.frame(annual_obs_filter)
-
-# allFiles2$mudbank_outlier
-
-# 
-deltaDistr <- ggplot(data = subset(allFiles2, !(pos %in% posToExclude) &
-       mudbank_outlier < 1), aes(x=deltaCoast, fill= as.factor(noMudbank))) + 
-  geom_histogram(binwidth=25, alpha = 0.5) +
-  # geom_density(alpha = 0.5) +
-  # facet_wrap(paste0('~', 'five_year_col')) +
-  scale_x_continuous(limits = c(-250, 250))
-
+# ggsave(density_mudbank, filename = paste0("./results/temp_maps/", 'Suriname_coastlineChange_gt30m',
+                         # '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+       # width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 #'
 #'   or from a spatial perspective
@@ -783,22 +616,6 @@ density <- unique(Tempcount) %>%
 
 plot(density$pos, density$mudbankObs)
 
-# testUniqueCount <- density %>% 
-#   dplyr::group_by(pos) %>%
-#   dplyr::summarise(value = max(count)) %>%
-#   ungroup()
-# 
-# hist(testUniqueCount$value)
-# 
-# isItMedian <-  median(testUniqueCount$value)
-# isItMean <- mean(testUniqueCount$value)
-# isItMode <- Mode(testUniqueCount$value)
-# isItSD <- sd(testUniqueCount$value)
-# testFilter <- subset(density, count > isItMedian)
-
-# toevoegen; per pos maar 1x meenemen
-# filter out positions with a low count (compared to the observations?)
-
 # make it spatial
 maxCount <- SpatialPoints(data.frame(x = density$x,y = density$y),
                                   CRS("+proj=longlat +datum=WGS84"))
@@ -809,58 +626,68 @@ addComposite + meanPos_sp + maxCount_spatial
 
 
 # alongshore variable coastline change as a result of mud fraction
-ggplot(annual_obs, aes(x = pos, y = deltaCoast, colour = SmoothedPeakFract)) +
-  geom_point(size = 1, alpha =1) +
-  scale_colour_gradient2(low = "#2166ac", high = "#b2182b", mid = '#fddbc7', 
-                         limits = c(0.2, 0.6),
-                         midpoint = 0.4, na.value = NA,
-                         guide = guide_colourbar(direction = 'vertical')) +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 10),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
+# ggplot(annual_obs, aes(x = pos, y = deltaCoast, colour = SmoothedPeakFract)) +
+#   geom_point(size = 1, alpha =1) +
+#   scale_colour_gradient2(low = "#2166ac", high = "#b2182b", mid = '#fddbc7',
+#                          limits = c(0.2, 0.6),
+#                          midpoint = 0.4, na.value = NA,
+#                          guide = guide_colourbar(direction = 'vertical')) +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 10),
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9'))
 
 
 # ggplot idea: https://www.earthdatascience.org/tutorials/visualize-2d-point-density-ggmap/
 pointDensity <- ggplot(subset(annual_obs,   # mudbank_outlier == 0 &
                                 x != -1), 
                        aes(x = x, y = y, colour = SmoothedPeakFract)) +
-  geom_point(size = 0.2, alpha = 0.2) +
+  geom_point(size = 0.6, alpha = 0.2) +
   
   scale_colour_gradient2(low = "#2166ac",
                          high = "#b2182b",
                          mid = '#fddbc7', midpoint = 0.4,
                          na.value = NA,
-                         guide = guide_colourbar(direction = 'horizontal')) +
+                         guide = guide_colourbar(direction = 'horizontal', order = 1)) +
   geom_point(data = subset(annual_obs,  mudbank_outlier == 0 &
                            x != -1 & noMudbank == 0),
-             aes(x = distX, y = distY), colour = 'black', size = 0.8, alpha = 1) + 
-
-  coord_equal() +
-  labs(x = "Longitude", y = "Latitude", col = 'Fraction') +
+             aes(x = distX, y = distY, fill = 'black'), colour = 'black', 
+             size = 2, alpha = 1) + 
+  scale_fill_manual(name = ' ', values = c('black'= 'black'), 
+                    labels = c('mudbank'), 
+                    guide = guide_legend(order =2, label.position = 'left',
+                                         label.theme = element_text(size = 16))) +
+  coord_equal(xlim = c(-57,-54), ylim = c(5.8, 6.2), ratio = 1.5) +
+  labs(x = "Longitude", y = "Latitude", col = 'Fraction', 
+       title = paste0(year(dateForTest))) +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        axis.text.x = element_text(size = 14,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 14, hjust = .5, vjust = .5),
+        axis.title.x = element_text(size = 16, face = "bold"), 
+        axis.title.y = element_text(size = 16, face = "bold"), 
+        legend.title = element_text(colour = 'black', size = 16),
         legend.key = element_rect(fill = NA),
         legend.text = element_text(size = 10),
-        legend.position = c(.5, -.9),
+        legend.position = c(.3, -.7),
+        legend.direction = "horizontal",
+        legend.box = "horizontal",
+        plot.title = element_text(hjust = 0.5, size = 20, face = 'bold'),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'),
+        plot.background = element_rect(fill = NA), # '#d9d9d9'
         strip.text.x = element_text(size = 14, face = 'bold'))
-# pointDensity
+pointDensity
 
 
 #'
