@@ -56,8 +56,8 @@ leaflet() %>%
 years <- seq(from = 2015, to = 2020, by = 1)
 
 
-exportSwitch <- T # or F when exporing images in GEE not necessary
-aoi <- c('WegNaarZee') # WegNaarZee / Braamspunt
+exportSwitch <- F # or F when exporing images in GEE not necessary
+aoi <- c('Braamspunt','WegNaarZee') # WegNaarZee / Braamspunt
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
 df <- rewrite(folderSelect);
@@ -65,8 +65,12 @@ df <- rewrite(folderSelect);
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
 
 # acquisition dates of drone data
-#c("2019-06-20, '2019-07-13') # weg naar zee
-reference_dates <- c('2019-06-20')#c('2020-02-19')#c("2019-06-20", '2019-07-13') #)  #, '2019-07-13', '2020-02-03' 2019-07-24 # Braamspunt
+
+reference_dates <- c('2019-06-20','2019-07-13','2019-07-24','2020-02-03',
+                     '2020-02-19', '2020-02-03')
+# reference_dates <-  c('2019-07-13')                         # weg naar zee East
+# reference_dates <-  c('2019-06-20') #2019-06-20, 2020-02-19    # Weg Naar Zee West
+# reference_dates <-  c('2020-02-03') # 2020-02-03, 2019-07-24    # Braamspunt
 
 
 filtered <- vector('list', 100)
@@ -185,40 +189,145 @@ output <- data.frame(distance=double(),
            shapeName = character(),
            pattern = character(),
            stringsAsFactors=FALSE)
+# 
+# scenarios <- c()
+# posRange <- c()
+scenarioTable <- data.frame(aoi = character(),
+                            posrange = double(),
+                            referenceDate = character(),
+                            acquisitionDate = character(),
+                            xlimt0 = double(),
+                            xlimit1 = double(),
+                            ylimit0 = double(),
+                            ylimit1 = double())
+
+
+
 
 
 # select correct transects & images (scenarios)
-if(aoi == 'Braamspunt' & '2019-07-24' %in% reference_dates){
+if('Braamspunt' %in% aoi & '2019-07-24' %in% reference_dates){
     scenarios <- c('2019-08-07', '2019-08-23',
                  '2019-09-08','2019-09-24', '2019-10-10', "2019-10-26")
+    
+    for(sc in scenarios){
+      # sc <- scenarios[1]
+      
+      scenarioTable <- rbind(scenarioTable, data.frame(
+        aoi = 'Braamspunt', posrange = seq(26970, 27900, 30),
+        referenceDate = '2019-07-24', acquisitionDate = sc,
+        xlimt0 = -55.171, xlimit1 = -55.155, ylimit0 = 5.942, ylimit1 = 5.96
+        # xlimits = c(-55.171, -55.155), ylimits = c(5.942, 5.96)
+      ))
+    }
   # POS range: braamspunt 26970 - 27900 by 30 m
-    posRange <- seq(26970, 27900, 30)
-  }else if(aoi == 'Braamspunt' & '2020-02-03' %in% reference_dates){
+    # posRange <- c(posRange, seq(26970, 27900, 30))
+    # xlimits <- c(-55.171, -55.155)
+    # ylimits <- c(5.942, 5.96)
+    } 
+if('Braamspunt' %in% aoi & '2020-02-03' %in% reference_dates){
     scenarios <- c('2019-12-29', '2020-03-02', '2020-03-10','2020-03-18')
-    posRange <- seq(26970, 27900, 30)
-  }else if(aoi == 'WegNaarZee' & ('2019-06-20' %in% reference_dates |
-                                  '2019-07-13' %in% reference_dates)) { 
-    scenarios <- c('2019-03-16', '2019-04-01', '2019-08-23',
+    
+    for(sc in scenarios){
+      # sc <- scenarios[1]
+      
+      scenarioTable <- rbind(scenarioTable, data.frame(
+        aoi = 'Braamspunt', posrange = seq(26910, 27870, 30),
+        referenceDate = '2020-02-03', acquisitionDate = sc,
+        xlimt0 = -55.171, xlimit1 = -55.155, ylimit0 = 5.942, ylimit1 = 5.96
+      ))}
+    # posRange <- c(posRange, seq(26970, 27900, 30))
+    } 
+if('WegNaarZee'  %in% aoi & ('2019-06-20' %in% reference_dates)) { 
+  scenarios <- c('2019-03-16', '2019-04-01', '2019-08-23',
                  '2019-09-08', '2019-08-31', '2019-10-10',
                  '2019-09-24', '2019-06-04')
-    posRange <- c(seq(13050, 14160, 30), seq(16410, 17310, 30)) # for both east & west locations
-  }else if(aoi == 'WegNaarZee' & '2020-02-19' %in% reference_dates){
-    scenarios <- c('2019-12-29', '2020-03-02', '2020-03-10')
-    posRange <- seq(13050, 14160, 30)}
+  for(sc in scenarios){
+    # sc <- scenarios[1]
+    
+    scenarioTable <- rbind(scenarioTable, data.frame(
+      aoi = 'WegNaarZee_West', posrange = seq(13080, 14160, 30),
+      referenceDate = '2019-06-20', acquisitionDate = sc,
+      xlimt0 = -55.227, xlimit1 = -55.22, ylimit0 = 5.896, ylimit1 = 5.908
+    ))}
+  
+    # aoi_name <- paste0(aoi, '_west')
+    # posRange <- c(posRange, seq(16410, 17310, 30)) # for both east & west locations
+    # xlimits <- c(-55.227, -55.22)
+    # ylimits <- c(5.896, 5.908)
+  } 
+if('WegNaarZee' %in% aoi & ('2019-07-13' %in% reference_dates)) { 
+    aoi_name <- paste0(aoi, '_east')
+    scenarios <- c('2019-04-01', '2019-08-23',
+                   '2019-09-08', '2019-08-31', '2019-10-10')
+    for(sc in scenarios){
+      # sc <- scenarios[1]
+      # 17310 	16140
+      scenarioTable <- rbind(scenarioTable, data.frame(
+        aoi = 'WegNaarZee_East', posrange = seq(16380, 17250, 30),
+        referenceDate = '2019-07-13', acquisitionDate = sc,
+        xlimt0 = -55.199, xlimit1 = -55.187, ylimit0 = 5.891, ylimit1 = 5.896
+      ))}
+    
+    # posRange <- c(posRange, seq(13050, 14160, 30)) # for both east & west locations
+    # xlimits <- c(-55.199, -55.187)
+    # ylimits <- c(5.891, 5.896)
+    } 
+if('WegNaarZee' %in% aoi & '2020-02-19' %in% reference_dates){
+  
+  scenarios <- c('2019-12-29', '2020-03-02', '2020-03-10')
+  for(sc in scenarios){
+    # sc <- scenarios[1]
+    
+    scenarioTable <- rbind(scenarioTable, data.frame(
+      aoi = 'WegNaarZee_West', posrange = seq(12990,	14070, 30),
+      referenceDate = '2020-02-19', acquisitionDate = sc,
+      xlimt0 = -55.227, xlimit1 = -55.22, ylimit0 = 5.896, ylimit1 = 5.908
+    ))}
+  
+    # aoi_name <- paste0(aoi, '_west')
+    # posRange <- c(posRange, seq(13050, 14160, 30))
+    # xlimits <- c(-55.227, -55.22)
+    # ylimits <- c(5.896, 5.908)
+    }
 
 allLines <- vector('list', nrow(filtered))
 
-for (im in scenarios){
-  # im <- scenarios[4]
-  # all coastline Points detected in landsat image
-  coastlines_selection <-subset(allFiles, allFiles$DATE_ACQUIRED == as.character(as.Date(im)) &
-                                  allFiles$coastX != 0 &
-                                  (pos %in% posRange))
+
+
+# for (im in scenarios){
+# im <- scenarios[4]
+for (groupScenario in unique(scenarioTable$referenceDate)){
+  # groupScenario <-  unique(scenarioTable$referenceDate)[1]
+  allObs <- subset(scenarioTable, scenarioTable$referenceDate ==groupScenario)
   
-  for (f in 1:nrow(filtered)){
-    # f <- 5
+  observationDates <- as.character(unique(allObs$acquisitionDate))
+  posVals <- unique(allObs$posrange)
+  
+  # all coastline Points detected in landsat images
+  # coastlines_selection <-subset(allFiles, 
+                                # (allFiles$DATE_ACQUIRED %in% 
+                                  # observationDates) &
+                                # allFiles$coastX != 0 &
+                                # (pos %in% posVals))
+  # subset filtered such that only relevant shapes (braamspunt/WnZ are selected)?
+  # and only correct year
+  files <- filtered %>% 
+    dplyr::filter(str_detect(text,as.character(gsub('-', '',  groupScenario))))
+  
+  for(dates in observationDates) {
+    # dates <- observationDates[2] #unique(coastlines_selection$DATE_ACQUIRED)[2]
+    # coastlines_selection2 <- subset(coastlines_selection, 
+                                    # DATE_ACQUIRED == dates)
+    coastlines_selection <-subset(allFiles, 
+                                  DATE_ACQUIRED == dates &
+                                    allFiles$coastX != 0 &
+                                    (pos %in% posVals))
+  
+    for (f in 1:nrow(files)){
+    # f <- 2
     # read coastline file
-    file <- filtered[f,1]
+    file <- files[f,1]
     strings<- str_split(file, '/')[[1]]
     shape <- gsub(x=strings[6] ,pattern=".shp",replacement="",fixed=T)
     
@@ -249,63 +358,59 @@ for (im in scenarios){
       coastlines_selection$coastX, coastlines_selection$coastY),
       proj4string=CRS("+proj=longlat +datum=WGS84"),
       data = data.frame(coastlines_selection))
-    
-    # mapview(coastlines_selection_sp)
-    
+    # mapview(coastlines_selection_sp) + mapview(line) + mapview(bbox_buf)
     # clip points
     pointsOfInt <- intersect(coastlines_selection_sp, bbox_buf)
     
-    # if no points found, break look
-    if(length(pointsOfInt) == 0){break}
+    # if no points found, break look / or next?
+    if(length(pointsOfInt) == 0){next}
 
     allLines[[f]] <- coastline
-      testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
+    testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
                         pos = pointsOfInt$pos, DATE_ACQUIRED = pointsOfInt$DATE_ACQUIRED, 
                         uavdate, shape, pattern = paste0(pattern[1:2], collapse ='_'), 
                         coastX = pointsOfInt$coastX, coastY = pointsOfInt$coastY)
       
-      output<-rbind(output,testDist)
-      
-                         
+    output<-rbind(output,unique(testDist))
+    }
   }
   
-  reference_date <- as.Date(im)
-  
-  filtCollect <- collection$filterDate(as.character(reference_date-1), as.character(reference_date+1))
-  dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
-  
-  image <- ee$Image(filtCollect$sort("DATE_ACQUIRED")$first())   #
-  
-  id <- eedate_to_rdate(image$get("system:time_start"))
-  
-  first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
-  idAOI <- eedate_to_rdate(image$get("system:time_start"))
-  landsat <- image$get("SPACECRAFT_ID")$getInfo()
-  
-  # names <- img$bandNames()$getInfo()
-  export_bands = c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2")
-  
-  opt_selectorsL5 <- c("B1","B2", "B3", "B4", "B5", "B7")
-  opt_selectorsL8 <- c("B2", "B3", "B4", "B5", "B6", "B7")
-  opt_selectorsL7 <- c("B1", "B2", "B3", "B4", "B5", "B7")
-  
-  if (landsat == 'LANDSAT_5'){
-    image<-image$select(
-      opt_selectors = opt_selectorsL5,
-      opt_names = export_bands)}
-  
-  if (landsat == 'LANDSAT_8'){
-    image<-image$select(
-      opt_selectors = opt_selectorsL8,
-      opt_names = export_bands)}
-  if (landsat == 'LANDSAT_7'){
-    image<-image$select(
-      opt_selectors = opt_selectorsL7,
-      opt_names = export_bands)}
-  
-  
+
   # firstAOI <- Map$addLayer(img, visParams,  as.character(as.Date(idAOI)))
   if(exportSwitch == T){
+    reference_date <- as.Date(im)
+    
+    filtCollect <- collection$filterDate(as.character(reference_date-1), as.character(reference_date+1))
+    dates <- ee_get_date_ic(filtCollect, time_end = FALSE)[,2]
+    
+    image <- ee$Image(filtCollect$sort("DATE_ACQUIRED")$first())   #
+    
+    id <- eedate_to_rdate(image$get("system:time_start"))
+    
+    first <- Map$addLayer(image, visParams,  as.character(as.Date(id)))
+    idAOI <- eedate_to_rdate(image$get("system:time_start"))
+    landsat <- image$get("SPACECRAFT_ID")$getInfo()
+    
+    # names <- img$bandNames()$getInfo()
+    export_bands = c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2")
+    
+    opt_selectorsL5 <- c("B1","B2", "B3", "B4", "B5", "B7")
+    opt_selectorsL8 <- c("B2", "B3", "B4", "B5", "B6", "B7")
+    opt_selectorsL7 <- c("B1", "B2", "B3", "B4", "B5", "B7")
+    
+    if (landsat == 'LANDSAT_5'){
+      image<-image$select(
+        opt_selectors = opt_selectorsL5,
+        opt_names = export_bands)}
+    
+    if (landsat == 'LANDSAT_8'){
+      image<-image$select(
+        opt_selectors = opt_selectorsL8,
+        opt_names = export_bands)}
+    if (landsat == 'LANDSAT_7'){
+      image<-image$select(
+        opt_selectors = opt_selectorsL7,
+        opt_names = export_bands)}
     
     # create larger buffer around aoi for plotting
     bbox_buf_large <- rgeos::gBuffer(spgeom = pol_bbox, byid = TRUE, width = 2000)
@@ -342,15 +447,48 @@ for (im in scenarios){
 
 # 10^1.2
 
-n_fun <- function(x){
+
+totalBox <- ggplot(output, aes(x=as.factor(shape), y = distance,
+                   fill = uavdate)) +
+  facet_wrap(~pattern, ncol = 5, scales = "free_x") +
+  geom_hline(yintercept = 30) +
+  geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6,
+             position=position_dodge(width = 1)) +
+  stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.5, vjust = 2.25,angle = 45,
+               position = position_dodge2(1)) +
   
-  # x1 <- runif(1, 1, 5)
-  return(data.frame(y = max(x, na.rm = T) + 10,
-                    label = paste0(length(x))))
-}
+  scale_y_continuous( breaks = c(0, 30, seq(100,round(max(output$distance), -2),100))) +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.title.x = element_blank(),
+    
+    
+    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 14),
+    # legend.position = c(.7, .3),
+    legend.title =  element_blank(),#element_text(colour = 'black', size = 20, face = 'bold'),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    strip.background = element_rect(fill = "#d9d9d9", colour = "white"),
+    # strip.text.x = element_blank(),#element_text(size = 16, face = 'bold') # Facet titles
+    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
+  )
 
-# filter scenarios on the amount of observations. (only plot > 10)
-
+totalBox
+# allUAV_estimated accuracy
+# ggsave(totalBox, filename = paste0("./results/Validation/", 'allUAV_estimated_accuracy',
+#                          '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # controls the panels
 facet <- 'uavdate'  
@@ -361,14 +499,14 @@ boxes <- 'ordered_date'
 # what patterns are there
 NR_facets <- unique(output[facet])#unique(output[facet])
 NR_xax <- unique(output[xaxis])
-variable_names <- data.frame(matrix(ncol = nrow(NR_xax), nrow = 1))
-for(i in seq_len(nrow(NR_xax))){
-  # i <- 1
-  variable_names[1,i] <- paste0(xaxis, ': ', as.character(NR_xax[i,]))
-  
-  colnames(variable_names)[i] <- as.character(NR_xax[i,])
-  
-}
+# variable_names <- data.frame(matrix(ncol = nrow(NR_xax), nrow = 1))
+# for(i in seq_len(nrow(NR_xax))){
+#   # i <- 1
+#   variable_names[1,i] <- paste0(xaxis, ': ', as.character(NR_xax[i,]))
+#   
+#   colnames(variable_names)[i] <- as.character(NR_xax[i,])
+#   
+# }
 
 
 output2 <- output %>%
@@ -388,10 +526,8 @@ output2$ordered_date <- as.character(output[order(as.Date(output$DATE_ACQUIRED))
 # define a set of colours that is at least as long as the longest image range
 colours <- c('#6a51a3', '#e935a1', '#66a61e','#d95f02','#e6ab02','#537eff','#666666','#a65628')
 
-# output$DATE_ACQUIRED2 <- factor(output$DATE_ACQUIRED, unique(output$DATE_ACQUIRED),
-#                                labels = c('1', '2', '4', '6',
-#                                           '5', '8', '7', '3'),
-#                                ordered = F)
+# what are the patterns to include on the x-axis
+unique(output2$pattern)
 
 boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance, 
                              fill = eval(as.name(boxes)))) +
@@ -407,7 +543,7 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
   #            labeller = labeller(as.name(xaxis) = dose.labs)) +
   geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6, 
                position=position_dodge(width = 1)) + 
-  stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.5,
+  stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.6, vjust = -0.2,
                position = position_dodge2(1)) +
   scale_fill_manual(values=colours[1:length(unique(output2$DATE_ACQUIRED))]) +
   
@@ -420,7 +556,7 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
     axis.line.x = element_line(size = 0.5, colour = "black"),
     axis.line.y = element_line(size = 0.5, colour = "black"),
     axis.line = element_line(size=1, colour = "black"),
-    axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold", angle = 45),
+    axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
     axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
     axis.title.y = element_text(size = 14, face = 'bold'),
     
@@ -428,7 +564,7 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.key = element_rect(fill = NA),
     legend.text = element_text(size = 14),
-    legend.position = c(.7, .9),
+    legend.position = c(.7, .8),
     legend.title =  element_blank(),#element_text(colour = 'black', size = 20, face = 'bold'),
     
     panel.border = element_blank(),
@@ -440,22 +576,24 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
     strip.text.x = element_blank(),#element_text(size = 16, face = 'bold') # Facet titles
     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
     )
+
 boxplot
 
 datesForExport <- paste0(unique(format(as.Date(reference_dates), "%Y")), collapse = '_')
-ggsave(filename = paste0("./results/Validation/", aoi, '_',datesForExport, '_coastlines_',
-        '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# ggsave(filename = paste0("./results/Validation/", unique(scenarioTable$aoi), '_',datesForExport, '_coastlines_',
+#         '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # read transects
 # transects <- rewrite(as.matrix(list.files(paste0('./data/raw/shapes/transects')), full.names = T)) %>%
-  # filter(str_detect(text,c('transects_kustlijn_WnZ_v3.shp$'))) 
-
-# transects_sp <- rgdal::readOGR(dsn = './data/raw/shapes/transects', 
-                               # layer = 'transects_kustlijn_WnZ_v3',#as.character(transects[1,1]),
-                               # verbose = F)       
+#   filter(str_detect(text,c('transects_kustlijn_WnZ_v3.shp$')))
+# 
+# transects_sp <- rgdal::readOGR(dsn = './data/raw/shapes/transects',
+#                                layer = 'transects_kustlijn_WnZ_v3',#as.character(transects[1,1]),
+#                                verbose = F)
 # transects_sp <- spTransform(transects_sp, CRS("+proj=longlat +datum=WGS84")) #%>%
   # fortify()
+# mapview(transects_sp)
   
 # select images
 imgSelect <- as.matrix(list.files(paste0('./data/raw/GEE_exports/validationImages'), full.names = T))
@@ -470,14 +608,11 @@ file <- df_img %>%
   # dplyr::mutate(new_id = str_extract(text, "[^_]+$"))
   # arrange_all()
 
-  
-  
 # also needs to ordered on date!
-
 # test for 1 file to start with
 
 for (ir in 1:nrow(file)){
-  # ir<-4
+  # ir<-3
   path <- file[ir,]
   strings <- str_split(path, '/')[[1]]
 
@@ -496,8 +631,8 @@ for (ir in 1:nrow(file)){
                         crs = CRS(as.character("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")))
   # data.frame(transects[,1])
   # corresponding points 
-  correspoints <- subset(output, as.Date(DATE_ACQUIRED) == date)
-  
+  correspoints <- subset(output2, as.Date(DATE_ACQUIRED) == date)
+  if(nrow(correspoints) == 0){next}
   # unique(output$DATE_ACQUIRED)
   
   correspoints$title <-  paste0(date)
@@ -507,7 +642,7 @@ for (ir in 1:nrow(file)){
   
   
   rgb_plt  <-
-    ggRGB(img = repr,  r = 'NIR', g = 'Red', b = 'Green', stretch = "lin", alpha = 0.8)+
+    ggRGB(img = repr,  r = 'NIR', g = 'Red', b = 'Green', stretch = "lin", alpha = 0.8) +
     # geom_line(data = transects_sp,
     #           mapping = aes(x = long, y=lat, group = group),
     #           size = 0.1, linetype = "solid", alpha=0.8) + 
@@ -523,11 +658,12 @@ for (ir in 1:nrow(file)){
       facet_grid(. ~ title) + # workaround to get the title in a box
     labs(y = 'Lat', x = 'Long') + # , title = paste0(date)
     # scale_x_continuous(labels = scaleFUN)+
-      coord_cartesian(xlim=c(-55.227, -55.22),
-                      ylim = c(5.896, 5.908)) +
+      # coord_cartesian(xlim=c(-55.171, -55.153),
+      #   ylim = c(5.941, 5.96)) +
+    # coord_cartesian(xlim=c(xlimits[1], xlimits[2]),
+                    # ylim = c(ylimits[1], ylimits[2])) +
       
-    # scale_x_continuous(limits = c(-55.229, -55.215)) +
-    # scale_y_continuous(limits = c(5.895, 5.909)) +
+
     
     theme(panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", 
                                           size = 0.5),
@@ -544,7 +680,7 @@ for (ir in 1:nrow(file)){
           
           axis.title.x = element_text(size = 14, face = 'bold'),
           axis.title.y = element_text(size = 14, face = 'bold'))
-  # rgb_plt  
+  rgb_plt
   ggsave(rgb_plt, filename = paste0("./results/Validation/", 'uavDate_',
                                     datePattern, '_landsatDate_',dateShort,
           '_version',  format(Sys.Date(), "%Y%m%d"),'.png'),
