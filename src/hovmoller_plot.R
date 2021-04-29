@@ -184,7 +184,7 @@ hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFrac
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-hovmoller
+# hovmoller
 
 # ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_quarterly_1985_2020_',
                          # format(Sys.Date(), "%Y%m%d"),'.jpeg'),
@@ -212,15 +212,25 @@ allFiles2 <- allFiles %>% # annual_obs %>%
 
 
 breaks <- seq(0, max(allFiles2$pos), summarisePos)
-posLabel <- rollmean(breaks, 2) # set label to middle point of the aggregated groups
+
+# change this! Such that is is not the middle point but the most occurring of each group??
+# posLabel <- c(rollmean(c(breaks), 2)) # set label to middle point of the aggregated groups
+poslabel <- seq(summarisePos/2, max(allFiles2$pos)-summarisePos/2, summarisePos)
+
+
+
 allFiles2$negPos <- 1
 allFiles2$alongshore_negPos <- 1
 myColors <- data.frame(id = character(), col = character(), year = character(),
                        positionGroup = character(), mean = double())
 
 allFiles2 <- allFiles2 %>%
-  dplyr::mutate(newPos =cut(pos,breaks, right = FALSE, labels = posLabel)) %>%
+  dplyr::mutate(newPos = cut(pos,breaks, #right = T, include.lowest = F,
+                             labels = posLabel)) %>%
   ungroup()
+
+# class(allFiles2$pos)
+sort(unique(allFiles2$newPos))
 
 rectangles <- data.frame(id = character(),fill =  character(),
                          colour = character,
@@ -260,7 +270,7 @@ for(y in 1:length(all_years)){
                                              colour = 'black',
                                              xmin = startPos, xmax = endPos, 
                                              ymin = as.Date(selected_year)-184, # the geom_tiles per year have first of januari each year as midpoint  
-                                             ymax = as.Date(selected_year)+181)) # so to have years overlapping this needs to be adjusted.
+                                             ymax = as.Date(selected_year)+181)) # so to have years overlapping this needs to be corrected
   
   # get mean coastal change for given year
   # hist(unlist(annualSubset[which(annualSubset$deltaCoast != 0), 'deltaCoast']))
@@ -299,9 +309,6 @@ for (np in unique(allFiles2$newPos[!is.na(allFiles2$newPos)])){
   if(meanCoastlineChange < 0 ){
     allFiles2$alongshore_negPos[subsetIDX] <- 0
   }
-  
-  
-  
 }
 
 # boxplot idicating the annual variation in coastline changes
@@ -310,12 +317,12 @@ AllNonOutliers <- subset(allFiles2, coast_outlier ==1)
 annualVariation <- ggplot(AllNonOutliers,
              aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +  # alpha = negPos
   geom_boxplot(aes(fill = as.factor(negPos)),  outlier.shape=NA)+#outlier.colour="black") +          
-  scale_fill_manual('mean change', labels = c('negative', 'positive'),
+  scale_fill_manual('mean change', labels = c('Erosion', 'Accretion'),
                     values = c('#7b3294',  "#008837"),
                     guide = guide_legend(reverse=T)) +   
   guides()+
   coord_flip() +
-  labs(y ='Coastline Change [m]', y = "") +
+  labs(y ='Coastline Change [m/yr]', y = "") +
   scale_y_continuous(limits=c(-250,250)) +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -324,6 +331,7 @@ annualVariation <- ggplot(AllNonOutliers,
     axis.text.y = element_text(color = "grey20", size = 12, hjust = .5, vjust = .5),
     axis.title.x = element_text(size = 12, face = 'bold'),
     axis.title.y = element_blank(), 
+    legend.key = element_rect(fill = NA),
     strip.background = element_rect(fill = "white", colour = "white"),
     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.text = element_text(size = 12),
@@ -345,16 +353,27 @@ AllNonOutliers$newPos <-  as.numeric(as.character(AllNonOutliers$newPos))
 # now similarly to annual variation get for each group of position the variation
 # in coastline change
 
-aggregatedPos <- ggplot( subset(AllNonOutliers, !(pos %in% posToExclude)),
-                        aes(x=newPos, y = deltaCoast, group = newPos)) +  
+# subset of data to plot in aggregated pos
+# exclude transects
+subsetToPlot <- subset(AllNonOutliers, !(pos %in% posToExclude))
+
+# adjust the labels to account for positions
+adjustLabels <- subsetToPlot %>%
+  dplyr::group_by(newPos) %>%
+  dplyr::mutate(newPos2 = ifelse(any(newPos %in% posToExclude), Mode(pos), newPos)) %>%
+  ungroup()
+
+aggregatedPos <- ggplot( adjustLabels,
+                        aes(x=newPos2, y = deltaCoast, group = newPos2)) +  
   geom_boxplot(aes(fill = as.factor(alongshore_negPos)), outlier.shape=NA)+      
-  scale_fill_manual('mean change', labels = c('negative', 'positive'),
+  scale_fill_manual('mean change', labels = c('Erosion', 'Accretion'),
                     values = c('#7b3294', "#008837"),
                     guide = guide_legend(reverse=T)) +
 
-  labs(y =  'Coastline Change \n [m]', x = "Alongshore Position [m]") +
+  labs(y =  'Coastline Change \n [m/yr]', x = "Alongshore Position [km]") +
   scale_y_continuous(limits=c(-250,250)) +
-  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0)) +
+  scale_x_reverse(lim=c(max(adjustLabels$pos)+5000, 0), expand = c(0,0),
+                  labels = unit_format(unit = "", scale = 0.001)) +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
     axis.line.y = element_line(size = 0.5, colour = "black"),#element_blank(),
@@ -376,7 +395,7 @@ aggregatedPos <- ggplot( subset(AllNonOutliers, !(pos %in% posToExclude)),
     
   )
 
-# aggregatedPos
+aggregatedPos
 
 legendPos <- get_legend(aggregatedPos)
 aggregatedPos <- aggregatedPos + theme(legend.position = 'none')
@@ -429,7 +448,8 @@ p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
                       guide = guide_legend(ncol = 2))+
 
   labs(y = 'Year', x = '') + #Alongshore Position [m]
-  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0)) + # 
+  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0),
+                  labels = unit_format(unit = "", scale = 0.001)) + # 
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
@@ -446,14 +466,14 @@ p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-# p
+p
 
 legend <- get_legend(p)
 
 p <- p + theme(legend.position = 'none')
 
 
-kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/transects'),
+kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/shapes'),
                     layer = 'class10_line')
 
 shapefile_df <- fortify(kustlijn)
@@ -502,7 +522,7 @@ left2 <- plot_grid(p, aggregatedPos, mapped, ncol = 1, align = 'v',
 legends <- plot_grid(legend, NULL, legendAnnual, nrow = 1, ncol = 3, rel_widths = c(1,-2,3),
                      axis = 't', align = 'v') + 
   theme(panel.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')) #plot.margin = unit(c(0,0,0,0), 'cm')
-legends
+# legends
 
 right <- plot_grid(annualVariation, legends, ncol = 1, nrow = 2, 
                    rel_heights = c(2.5, 1.5),
@@ -513,11 +533,11 @@ final <- plot_grid(left2, right, align = 'h', ncol = 2,
           rel_widths = c(2.5, 1)) + 
   theme(panel.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'))
 
-# final
+final
 
-# ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
-#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
+                         format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
 
