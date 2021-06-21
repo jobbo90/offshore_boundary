@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/endpoint?color=blue&label=v0.2&url=https%3A%2F%2Fgithub.com%2Fjobbo90%2Foffshore_boundary%2Freleases%2F)](https://github.com/jobbo90/offshore_boundary/releases/)
 
-![Alt text](https://github.com/jobbo90/offshore_boundary/tree/main/results/GIF/pos230000-animation.gif)
+<img src="results/GIF/pos230000-animation.gif?raw=true" width="800px">
 
 
 ## Description
