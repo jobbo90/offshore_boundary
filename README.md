@@ -1,8 +1,10 @@
-# MorphologicalUnits_figures
+## Multi-decadal coastline dynamics controlled by migrating subtidal mudbanks
 
-Version 0.1.0
+Version 0.2.0
 
-Figures that are used for the morphological units paper
+
+
+![Alt text](https://github.com/kvos/CoastSat/blob/master/doc/example.gif)
 
 
 ## Project organization
@@ -14,22 +16,22 @@ Figures that are used for the morphological units paper
 ├── LICENSE.md
 ├── README.md
 ├── requirements.txt
-├── bin                <- Compiled and external code, ignored by git (PG)
-│   └── external       <- Any external source code, ignored by git (RO)
-├── config             <- Configuration files (HW)
-├── data               <- All project data, ignored by git
-│   ├── processed      <- The final, canonical data sets for modeling. (PG)
-│   ├── raw            <- The original, immutable data dump. (RO)
-│   └── temp           <- Intermediate data that has been transformed. (PG)
-├── docs               <- Documentation notebook for users (HW)
-│   ├── manuscript     <- Manuscript source, e.g., LaTeX, Markdown, etc. (HW)
-│   └── reports        <- Other project reports and notebooks (e.g. Jupyter, .Rmd) (HW)
+├── data               
+│   ├── processed      
+│   ├── raw
 ├── results
-│   ├── figures        <- Figures for the manuscript or reports (PG)
-│   └── output         <- Other output for the manuscript or reports (PG)
-└── src                <- Source code for this project (HW)
+│	├── GIF
+│	├── methodology_figures
+│	├── temp_maps
+│	├── Validation
+└── src
 
 ```
+
+## Usage
+The coastline position estimates are available through the Google Earth Engine code editor via: 
+https://code.earthengine.google.com/?accept_repo=users/jobdevries90/MangroMud
+
 
 
 ## License
