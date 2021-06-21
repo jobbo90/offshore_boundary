@@ -46,6 +46,7 @@ __pycache__/
 *.csv
 *.png
 *.jpeg
+*.mp4
 
 # exclude data from source control by default
 /data/temp
