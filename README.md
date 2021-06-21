@@ -4,7 +4,7 @@ Version 0.2.0
 
 
 
-![Alt text](https://github.com/jobbo90/offshore_boundary/tree/main/results/GIF/pos230000-animation.mp4)
+![Alt text](https://github.com/jobbo90/offshore_boundary/tree/main/results/GIF/pos230000-animation.gif)
 
 
 ## Project organization
