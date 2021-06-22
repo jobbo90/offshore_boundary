@@ -195,29 +195,30 @@ ggplot() +
   # plot super smoothed
   geom_point(data = df_fractions, aes(x = x_ax, y = supersmooth,
                                       colour = 'yellow'),
-              alpha = 0.5, ) +
+              alpha = 0.5, size = 2.5) +
   # plot original mud fraction values
-  geom_point(data = df_fractions, aes(x = x_ax, y = mud, colour = 'black'), alpha = 0.3) +
+  geom_point(data = df_fractions, aes(x = x_ax, y = mud, colour = 'black'), 
+             alpha = 0.3, size = 2) +
   # plot bilateral filter values
   geom_line(data = df_fractions, aes(x = x_ax, y = bilatMud, colour = 'red'), 
-            alpha = 1, size = 1) +
+            alpha = 1, size = 2.5) +
   # plot selected bilateral Peaks (larges, abs and slope drop)
-  geom_point(aes(x = xAxisDist, y = yAxisDist, colour = 'blue'), size = 3) +
+  geom_point(aes(x = xAxisDist, y = yAxisDist, colour = 'blue'), size = 5) +
   geom_segment(aes(x = xAxisDist, y = yAxisDist + 0.05,
-                   xend = xAxisDist + 1000, yend = yAxisDist+ 0.1 + 0.2),
-               arrow = arrow(length = unit(2.5, "mm"), ends = "first", 
+                   xend = xAxisDist + 1000, yend = yAxisDist+ 0.3),
+               arrow = arrow(length = unit(5, "mm"), ends = "first", 
                              type = 'closed'),
                colour = 'blue') +
   scale_y_continuous(name = 'Fractions') +
   scale_x_continuous(name = 'Distance [m]') +
-  scale_colour_manual(name = 'Legend', values =c('red' = 'red','blue' = 'blue',
-                                                 'yellow'='yellow',
+  scale_colour_manual(name = 'Legend', values =c('red' = '#d53e4f','blue' = 'blue',
+                                                 'yellow'='#ff7f00',
                                                  'black' = 'black'), 
                       labels = c('fractions','peaks', 'bilateral filter',
                                  'smoothed')) +
-  scale_fill_manual(name = ' ', values = c('grey'= '#f4a582'),
-                    labels = c('extent')) +
-  guides(color=guide_legend(override.aes=list(fill='#d9d9d9'), ncol = 2)) +
+  scale_fill_manual(name = ' ', values = c('grey'= '#8c510a'),
+                    labels = c('active migration')) +
+  guides(color=guide_legend(override.aes=list(fill='#d9d9d9'), ncol = 3)) +
   theme(
     
     axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -225,25 +226,25 @@ ggplot() +
     axis.line = element_line(size=1, colour = "black"),
     axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
     axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
-    axis.title.y = element_text(size = 18, face = 'bold'),
-    axis.title.x = element_text(size = 18, face = 'bold'),
+    axis.title.y = element_text(size = 30, face = 'bold'),
+    axis.title.x = element_text(size = 30, face = 'bold'),
 
-    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+    # legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.key = element_rect(fill = NA),
-    legend.text = element_text(size = 18),
+    legend.text = element_text(size = 50),
     legend.position = c(.7, .7),
-    legend.title =  element_text(colour = 'black', size = 20, face = 'bold'),
+    legend.title =  element_blank(),#element_text(colour = 'black', size = 30, face = 'bold'),
     
     panel.border = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     panel.background = element_blank(),
-    panel.spacing.x = unit(2, 'lines'),
-    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
+    panel.spacing.x = unit(2, 'lines')
+    # plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
   )
 
-# ggsave(filename = paste0("./results/methodology_figures/fraction_dist_", 
-#                          gsub(x=dateOfInterest,pattern="-",replacement="",fixed=T),
-#                          '_pos',posOfInterest,'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+ggsave(filename = paste0("./results/methodology_figures/fraction_dist_",
+                         gsub(x=dateOfInterest,pattern="-",replacement="",fixed=T),
+                         '_pos',posOfInterest,'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+        width = 20.1, height = 7.25, units = c('in'), dpi = 1200)
 #   

@@ -220,7 +220,6 @@ allFiles_dropPOS$baseline2 <- 0
 
 
 # normalize for the coastline position around a reference date
-
 for (sid in allPos) {
   # sid = 189000
   
@@ -281,34 +280,39 @@ ggplot(subset2d_for_testPlot, aes(x= DATE_ACQUIRED, y = coastDist)) + # color=co
                                      # linetype = as.factor(pos)),
             alpha = 0.5, size = 1.2) +
   
-  geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
+  geom_point(size = 8, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
   
   scale_color_manual(name = "Legend",
     values = c('red', 'blue'),
     labels = c("outlier", "distance")) +
-  # scale_linetype_manual(name = ' ', values = c('dashed'), labels = c('median')) +
-  
   scale_x_date(labels = date_format("%Y")) +
   ggtitle( paste0('position: ', twoD_pos)) +
+  guides(color=guide_legend(override.aes=list(fill='#d9d9d9'), ncol = 1)) +
   labs(x = "Year", y = "coastline position [m]") +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # strip.text.x = element_blank(), # remove panel labels
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        # legend.text = element_text(size = 15),
-        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                  vjust = -5), 
-        # legend.position = c(.78, .5),
+        axis.title.y = element_text(size = 70, face = 'bold'),
+        axis.title.x = element_text(size = 70, face = 'bold'),
+        axis.text.x = element_text(size = 35,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 35, hjust = .5, vjust = .5),
+        
+        legend.title = element_blank(),
+        legend.background = element_rect(fill = alpha('grey50',0.8)),
+        plot.title = element_text(hjust = 0.5, size = 50, face = 'bold',
+                                  vjust = -2), 
+        legend.text = element_text(size = 70),
+        legend.position = c(.7, .2),
+
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
-        plot.background = element_rect(fill = NA)) # '#d9d9d9'
+        plot.background = element_rect(fill = NA))
+
+# ggsave(filename = paste0("./results/methodology_figures/twoD_distance_",
+#                          '_pos',twoD_pos,'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 20.1, height = 10.25, units = c('in'), dpi = 1200)
+
 
 outliers <- sp_pnt_ee(subset(subset2d_for_testPlot, coast_outlier == 0)$coastX,
                       subset(subset2d_for_testPlot, coast_outlier == 0)$coastY,  'outliers',
@@ -336,6 +340,9 @@ firstAOI <- Map$addLayer(imageAOI, visParams,  as.character(as.Date(idAOI)))
 test2 <- firstAOI + nonOutliers + outliers
 setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
         subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
+
+
+
 
 
 #################################
@@ -401,9 +408,10 @@ coastlineChange <- ggplot(subset(allFiles_mutate, coast_outlier ==1),
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
+# coastlineChange
 
 
-ggplot(subset(allFiles_mutate, coast_outlier ==1), 
+testFigure <- ggplot(subset(allFiles_mutate, coast_outlier == 1), 
        aes(x= pos, y = normalized2)) + 
   # scale_y_continuous(limits=c(-500, 500)) +
   geom_point(size = 2, alpha = 0.1, aes(color = five_year_col))  +
@@ -442,7 +450,7 @@ ggplot(subset(allFiles_mutate, coast_outlier ==1),
 posEast <- c(seq(0 ,138000,1000))
 posWest <- c(seq(255000 ,max(allFiles_mutate$pos),1000))
 
-allFiles_mutate$alongshore = c('Middle')
+allFiles_mutate$alongshore = c('Center')
 
 allFiles_mutate <- allFiles_mutate %>%
   dplyr::mutate(alongshore = ifelse(pos %in% posEast, c('East'),alongshore)) %>%
@@ -454,97 +462,85 @@ meansOI <- allFiles_mutate %>%
   dplyr::summarize(mean=mean(normalized, na.rm = T)) %>%
   ungroup()
 
+overallMean <- mean(allFiles_mutate$normalized, na.rm = T)
+
 # coastline position compared to reference date (if x = normalized)
 
 xAxis_seq <- quantile(allFiles_mutate$normalized,c(0.001, 0.999), na.rm = T)
+
+overallMean <- allFiles_mutate %>%
+  dplyr::summarize(mean=mean(normalized, na.rm = T))
 
 
 
 spatialVariability <- ggplot(data = subset(allFiles_mutate, coast_outlier ==1), # & (deltaCoast > 30 | deltaCoast < -30)
        aes(x=normalized, fill=alongshore)) + 
   # geom_freqpoly(binwidth = 25 ) + #, colour = alongshore
-  geom_histogram(position = 'identity', binwidth = 25, alpha = 0.5) +
+  geom_histogram(position = 'identity', binwidth = 25, alpha = 0.6) +
   # geom_density(aes(x=normalized2, y = ..scaled..), alpha = 0.5, adjust = 2) + #y = ..density..
   # facet_wrap(paste0('~', 'five_year_col')) +
-  geom_vline(data = meansOI, aes(xintercept= mean), size = 1.5, colour = 'white',
+  geom_vline(data = meansOI, aes(xintercept= mean), size = 3.5, colour = 'black',
              linetype="solid") +
-  geom_vline(data = meansOI, aes(xintercept= mean, color=alongshore), size = 1,
+  geom_vline(data = meansOI, aes(xintercept= mean, color=alongshore), size = 2,
              linetype="solid") +
-  scale_y_continuous(expand = c(0,0)) + # limits = c(0, 1)
-  scale_x_continuous(breaks = sort(c(-2000, 0, 2000, 4000, round(meansOI$mean))), 
+  geom_vline(data = overallMean, aes(xintercept= mean, color = 'Black'), size = 2,
+             linetype="dashed") +
+  scale_color_manual(values = c('Black'= 'black', 
+                                'East' = '#33a02c',
+                                'Center' = '#1f78b4',
+                                'West' = '#fdbf6f')) +
+  scale_fill_manual(values = c('East' = '#33a02c',
+                               'Center' = '#1f78b4',
+                               'West' = '#fdbf6f')) +
+  
+  scale_y_continuous(expand = c(0,0)) + 
+  scale_x_continuous(breaks = sort(c(-2000, 0, 2000, 4000, round(meansOI$mean), round(overallMean$mean))), 
                      guide = guide_axis(n.dodge=2)) +
-  guides(color = guide_legend(override.aes = list(size = 3, alpha =1,
-                              linetype = 0))) +
-  labs(y = 'Observations [n]', x = 'Coastline change [m]') +
+  guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
+                              linetype = 0)),
+         colour = F) +
+  labs(y = 'Observations [n]', x = 'Coastline position [m]') +
   
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 16, face = 'bold'),
-        axis.title.x = element_text(size = 16, face = 'bold'),
-        axis.text.x = element_text(size = 14,  hjust = .5, vjust = .5, angle =45),
-        axis.text.y = element_text(size = 14, hjust = .5, vjust = .5),
+        axis.title.y = element_text(size = 20, face = 'bold'),
+        axis.title.x = element_text(size = 20, face = 'bold'),
+        axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
         legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
         legend.position = c(0.7,0.8),
-        legend.text = element_text(size = 16),
-        plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                  vjust = -5), 
+        legend.text = element_text(size = 20),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
-# ggsave(spatialVariability, filename = paste0("./results/temp_maps/", 
-#                                              'spatial_variability1985-2020',
-#                                    '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)  
+spatialVariability
+
+ggsave(spatialVariability, filename = paste0("./results/temp_maps/",
+                                             'spatial_variability1985-2020',
+                                   '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
   
-
-# ggplot(subset(allFiles_mutate, coast_outlier ==1 &
-#                 (pos %in% posWest)), 
-#        aes(x= normalized2)) + 
-#   geom_histogram(binwidth=30, alpha=.7, fill="#FF6666") +
-#   scale_x_continuous(limits = c(-2000, 2000)) +
-#   geom_vline(aes(xintercept=mean(normalized2, na.rm = T)),
-#              linetype="dashed")
-
-#################################
-#' 
-#' Hovmoller plots
-#' 
-#################################
-# Spatio temporal variation
+# unique(allFiles_mutate$normalized)
 
 
+# see if sections of the coast have different average coastline positions.
+range<- seq(0,140000,1000) # 140000 - 240000 / 240000 - 450000
 
-# improve: 'real' coastline 
-kustlijn <- readOGR(paste0(wd,'/data/raw/transects'),
-                              'class10_line_v5')
-shapefile_df <- fortify(kustlijn)
-
-mapped <- ggplot() +
-  geom_path(data = shapefile_df, 
-            aes(x = long, y = lat, group = group)) +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect()) 
-
-map_projected <- mapped +
-  coord_map() +
-  scale_x_continuous(limits=c(-57.1, -53.95),
-                     expand = c(0,0))#, limits=c(0,30000),)
+spatioTemporalVar <- subset(allFiles_mutate, coast_outlier == 1 & pos %in% range) %>% 
+  dplyr::group_by(year) %>%
+  dplyr::mutate(n = n()) %>%
+  dplyr::summarize(mean_val = mean(normalized2, na.rm = T), count = mean(n)) 
 
 
+averagePos <- ggplot(data = spatioTemporalVar, 
+                     aes(x = year, y = mean_val, fill = year)) +
+  geom_point()
+  
+averagePos
 
 
 #################################

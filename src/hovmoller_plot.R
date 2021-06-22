@@ -88,9 +88,6 @@ allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
                                                               na.strings=c("","NA")
                                                               ))))
 
-allFiles$distX <- NA
-allFiles$distY <- NA
-allFiles$medianOffshore <- NA
 
 #'
 #' create an image collection
@@ -145,50 +142,7 @@ uniqueDates <- unique(allFiles[,'DATE_ACQUIRED']);
 all_years <- unique(allFiles$year_col)
 group_pos <- unique(allFiles$pos)
 
-# plot alongshore variability of mud fractions
-# allFiles$meanMud # SmoothedPeakFract
-range <- round(quantile(subset(allFiles, 
-                               !is.na(SmoothedPeakFract) & 
-                                 #allFiles$mudbank_outlier <1 &
-                                 SmoothedPeakFract > 0 )$SmoothedPeakFract,c(0.05,0.5, 0.99), 
-                        na.rm=T), 2)
-# unique(allFiles$quarterly_col)
-# alongshore variation of mud fractions
-hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFract > 0 
-                  & #allFiles$mudbank_outlier <1 &
-                    !(pos %in% posToExclude)),
-           aes(x = pos,y = as.Date(quarterly_col), fill=SmoothedPeakFract))+  
-  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
-  scale_fill_gradient2(limits = c(range[[1]], range[[3]]), 
-                       breaks = c(range[[1]], range[[2]], range[[3]]),
-                       low = "#313695", high ="#a50026", mid = '#f7f7f7',
-                       midpoint = range[[2]],
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       oob=squish, na.value = NA) + #"grey50"
-  labs(y = 'Date', x = 'position') +
-  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0)) +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_text(size = 12, face = 'bold'),#element_blank(), #element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-# hovmoller
 
-# ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_quarterly_1985_2020_',
-                         # format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-       # width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 #'
 #' 
@@ -196,41 +150,39 @@ hovmoller <-ggplot(subset(allFiles, !is.na(SmoothedPeakFract) & SmoothedPeakFrac
 #'
 #'
 
+# aggregated pos gos per x Meters:
 summarisePos <- 10000
 
-# adding a indicaiton of noMudbank positions (so all observations on that POS recieve 1)
-# only when at least 50%? of observation in a pos is a mudbank
-allFiles2 <- allFiles %>% # annual_obs %>%
-  group_by(year_col, pos) %>%
-  dplyr::mutate(
-    noMudbank = case_when(
-      validMudbankObs/mudbankObs > 0.6 ~ 0, 
-      TRUE ~ 1)) %>% 
-  
-  ungroup() #%>%
-  # dplyr::select(year_col, pos, mudbank_outlier, axisDist, noMudbank) 
+
+# MOVE TO PRE-PROCESS
+# allFiles <- allFiles %>% # annual_obs %>%
+#   group_by(year_col, pos) %>%
+#   dplyr::mutate(
+#     noMudbank = case_when(
+#       validMudbankObs/mudbankObs > 0.66 ~ 0,
+#       TRUE ~ 1)) %>%
+# 
+#   ungroup() #%>%
+#   # dplyr::select(year_col, pos, mudbank_outlier, axisDist, noMudbank)
 
 
-breaks <- seq(0, max(allFiles2$pos), summarisePos)
+breaks <- seq(0, max(allFiles$pos), summarisePos)
 
-# change this! Such that is is not the middle point but the most occurring of each group??
-# posLabel <- c(rollmean(c(breaks), 2)) # set label to middle point of the aggregated groups
-poslabel <- seq(summarisePos/2, max(allFiles2$pos)-summarisePos/2, summarisePos)
+# position label for plotting x-axis
+poslabel <- seq(summarisePos/2, max(allFiles$pos)-summarisePos/2, summarisePos)
 
-
-
-allFiles2$negPos <- 1
-allFiles2$alongshore_negPos <- 1
+allFiles$negPos <- 1
+allFiles$alongshore_negPos <- 1
 myColors <- data.frame(id = character(), col = character(), year = character(),
                        positionGroup = character(), mean = double())
 
-allFiles2 <- allFiles2 %>%
+allFiles <- allFiles %>%
   dplyr::mutate(newPos = cut(pos,breaks, #right = T, include.lowest = F,
-                             labels = posLabel)) %>%
+                             labels = poslabel)) %>%
   ungroup()
 
-# class(allFiles2$pos)
-sort(unique(allFiles2$newPos))
+# class(allFiles$pos)
+sort(unique(allFiles$newPos))
 
 rectangles <- data.frame(id = character(),fill =  character(),
                          colour = character,
@@ -245,14 +197,14 @@ rectangles <- data.frame(id = character(),fill =  character(),
 
 for(y in 1:length(all_years)){
   # y <- 4
-  # selected_year <- '2008-01-01'
+  # selected_year <- '1991-01-01'
   selected_year <- all_years[y]
-  annualSubset <- subset(allFiles2,as.Date(year_col) == selected_year &
+  annualSubset <- subset(allFiles,as.Date(year_col) == selected_year &
                            coast_outlier == 1)
-  idx <- which(allFiles2$year_col == selected_year & 
-                 allFiles2$coast_outlier == 1)
+  idx <- which(allFiles$year_col == selected_year & 
+                 allFiles$coast_outlier == 1)
   
-  # # all posiotions considered a mudbank during given year
+  # all posiotions considered a mudbank during given year
   mudbankObs <- subset(annualSubset, !(pos %in% posToExclude) &
                      noMudbank == 0)
   getPos <- unique(mudbankObs$pos)
@@ -274,7 +226,17 @@ for(y in 1:length(all_years)){
   
   # get mean coastal change for given year
   # hist(unlist(annualSubset[which(annualSubset$deltaCoast != 0), 'deltaCoast']))
-  meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
+  # ggplot(data = subset(annualSubset, deltaCoast != 0), 
+  #        aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +
+  #   geom_boxplot() +
+  #   scale_y_continuous(limits=c(-250,250))
+  
+  # meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
+  # annualSubsetChanges <- subset(annualSubset, deltaCoast != 0)
+  meanVal <- ifelse(nrow(annualSubset) > 0, 
+                      mean(annualSubset$deltaCoast, na.rm =T),
+                      0)
+
   # medianVal <- median(annualSubset$deltaCoast, na.rm =T)
   
   myColors <- rbind(myColors, data.frame(id = 'annualChange', year =  selected_year,
@@ -282,21 +244,21 @@ for(y in 1:length(all_years)){
                                          col =  ifelse(meanVal>0 , '#2166ac', # blue if positive
                                  ifelse(meanVal < 0, '#b2182b', # red if negative
                                         "grey90"))))
-  
+  print(paste0(selected_year, ': ', round(meanVal,2)))
   if(meanVal < 0){
-    print(paste0(selected_year, ': ', round(meanVal,2)))
-    allFiles2$negPos[idx] <- 0
+    
+    allFiles$negPos[idx] <- 0
   }
 }
 
-# for each group of positions
-for (np in unique(allFiles2$newPos[!is.na(allFiles2$newPos)])){
+# for each group of positions: calculate mean coastline change
+for (np in unique(allFiles$newPos[!is.na(allFiles$newPos)])){
   # np <- unique(annualSubset$newPos)[10]
-  posSubset <- subset(allFiles2, newPos == as.numeric(as.character(np)) &
-                        coast_outlier == 1)
+  posSubset <- subset(allFiles, newPos == as.numeric(as.character(np)) &
+                        coast_outlier == 1) 
   # corresponding index in original file
-  subsetIDX <- which(allFiles2$newPos == as.numeric(as.character(np)) &
-                       allFiles2$coast_outlier == 1)
+  subsetIDX <- which(allFiles$newPos == as.numeric(as.character(np)) &
+                       allFiles$coast_outlier == 1)
   
   meanCoastlineChange <- mean(posSubset$deltaCoast, na.rm = T)
   
@@ -305,21 +267,23 @@ for (np in unique(allFiles2$newPos[!is.na(allFiles2$newPos)])){
                                          col =  ifelse(meanCoastlineChange>0 , '#2166ac', # blue if positive
                                                        ifelse(meanCoastlineChange < 0, '#b2182b', # red if negative
                                                               "grey90"))))
-  
+  print(paste0(np, ': ', round(meanCoastlineChange,2)))
   if(meanCoastlineChange < 0 ){
-    allFiles2$alongshore_negPos[subsetIDX] <- 0
+    allFiles$alongshore_negPos[subsetIDX] <- 0
   }
 }
 
 # boxplot idicating the annual variation in coastline changes
-AllNonOutliers <- subset(allFiles2, coast_outlier ==1)
-
+AllNonOutliers <- subset(allFiles, coast_outlier == 1)
 annualVariation <- ggplot(AllNonOutliers,
              aes(x=as.Date(year_col), y = deltaCoast , group = as.factor(year_col))) +  # alpha = negPos
+
   geom_boxplot(aes(fill = as.factor(negPos)),  outlier.shape=NA)+#outlier.colour="black") +          
   scale_fill_manual('mean change', labels = c('Erosion', 'Accretion'),
                     values = c('#7b3294',  "#008837"),
-                    guide = guide_legend(reverse=T)) +   
+                    guide = guide_legend(reverse=T)) +  
+  geom_hline(yintercept = 0, color= 'red',
+             linetype="dashed", size = 1) +
   guides()+
   coord_flip() +
   labs(y ='Coastline Change [m/yr]', y = "") +
@@ -348,7 +312,6 @@ annualVariation <- ggplot(AllNonOutliers,
 legendAnnual <- get_legend(annualVariation)
 annualVariation <- annualVariation + theme(legend.position = 'none')
 
-
 AllNonOutliers$newPos <-  as.numeric(as.character(AllNonOutliers$newPos))
 # now similarly to annual variation get for each group of position the variation
 # in coastline change
@@ -363,12 +326,17 @@ adjustLabels <- subsetToPlot %>%
   dplyr::mutate(newPos2 = ifelse(any(newPos %in% posToExclude), Mode(pos), newPos)) %>%
   ungroup()
 
-aggregatedPos <- ggplot( adjustLabels,
-                        aes(x=newPos2, y = deltaCoast, group = newPos2)) +  
+# adjustLabels <- subset(adjustLabels, deltaCoast != 0)
+
+aggregatedPos <- ggplot(adjustLabels, aes(x=newPos2, y = deltaCoast, 
+                                          group = newPos2)) +  
+  geom_hline(yintercept = 0, color= 'red',
+             linetype="dashed", size = 1) +
   geom_boxplot(aes(fill = as.factor(alongshore_negPos)), outlier.shape=NA)+      
   scale_fill_manual('mean change', labels = c('Erosion', 'Accretion'),
                     values = c('#7b3294', "#008837"),
                     guide = guide_legend(reverse=T)) +
+
 
   labs(y =  'Coastline Change \n [m/yr]', x = "Alongshore Position [km]") +
   scale_y_continuous(limits=c(-250,250)) +
@@ -392,10 +360,9 @@ aggregatedPos <- ggplot( adjustLabels,
     panel.spacing.x = unit(2, 'lines'),
     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     strip.text.x = element_text(size = 16, face = 'bold') # Facet titles
-    
   )
 
-aggregatedPos
+# aggregatedPos
 
 legendPos <- get_legend(aggregatedPos)
 aggregatedPos <- aggregatedPos + theme(legend.position = 'none')
@@ -405,17 +372,17 @@ aggregatedPos <- aggregatedPos + theme(legend.position = 'none')
 #' hovmoller plots
 #'
 #####
-posOfInterest <- c(50000, 210000, 310000)
-dataPOI <- subset(allFiles2, (pos %in% posOfInterest))
+posOfInterest <- c(50000, 210000, 350000)
+dataPOI <- subset(allFiles, (pos %in% posOfInterest))
 
 poiOriginX <- c(as.matrix(tapply(dataPOI$originX, dataPOI$pos, median)))
 poiOriginY <- c(as.matrix(tapply(dataPOI$originY, dataPOI$pos, median)))
 
 # 
 # Spatio temporal variation
-range <- round(quantile(allFiles2$deltaCoast,c(0.05, 0.95), na.rm=T))
+range <- round(quantile(allFiles$deltaCoast,c(0.05, 0.95), na.rm=T))
 
-p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
+p <-ggplot(subset(allFiles, !is.na(deltaCoast) & !(pos %in% posToExclude)),
            aes(x = pos,y = as.Date(year_col), fill=deltaCoast)) + 
 
   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
@@ -423,38 +390,48 @@ p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
   # resolve here that values larger than the range are indicated in the colourbar 
   # now it reads as if the largest value is -125m/yr where as actually there is locations that
   # have larger values.
-  scale_fill_gradient2(name = 'change [m/yr] \n',limits = c(range[[1]],range[[2]]), 
-                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
-                       low = '#7b3294', high = "#008837", mid = '#f7f7f7', # "#a50026" , "#313695"
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       na.value = NA, oob=squish) + # squish clamps all values to be within min & max of limits arguments
-  
+  # scale_fill_gradient2(name = 'change [m/yr] \n',limits = c(range[[1]],range[[2]]),
+  #                      # breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+  # 
+  #                      low = '#7b3294', high = "#008837", mid = '#f7f7f7',
+  #                      guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+  #                                              draw.llim = FALSE),
+  #                      na.value = NA, oob=squish) + # squish clamps all values to be within min & max of limits arguments
+
+
+scale_fill_gradientn(name = 'change [m/yr] \n',
+                     breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+                     limits = c(range[[1]],range[[2]]),
+                     colours = c('#7b3294', '#f7f7f7', "#008837"),
+                     guide = guide_colourbar(nbin=100, draw.ulim = FALSE, draw.llim = FALSE),
+                     oob=squish,
+                     values = scales::rescale(c(range[[1]], -50, 0, 50, range[[2]]))
+                     ) +
   geom_vline(xintercept = posOfInterest, color= 'red',
              linetype="dashed") +
-  # geom_text() + 
-  annotate("text", label = as.roman(1:length(poiOriginX)), 
-           x = posOfInterest + 6000, 
-           y = rep(as.Date('1984-06-30'),length(poiOriginX)), 
+  geom_text() +
+  annotate("text", label = as.roman(1:length(poiOriginX)),
+           x = posOfInterest + 6000,
+           y = rep(as.Date('1984-06-30'),length(poiOriginX)),
            size = 6, colour = "red") +
   
   geom_rect(data = rectangles, inherit.aes = FALSE,
             aes(xmin = xmin, xmax = xmax,
                 ymin = ymin,
-                ymax = ymax, colour = colour), fill = NA) + 
+                ymax = ymax, colour = colour), fill = NA, size = 1) + 
   
   scale_colour_manual(name = ' ', values = c("black"),
                       labels = c('mudbank'),
                       guide = guide_legend(ncol = 2))+
 
-  labs(y = 'Year', x = '') + #Alongshore Position [m]
-  scale_x_reverse(lim=c(max(allFiles2$pos)+4000, 0), expand = c(0,0),
+  labs(y = 'Year', x = '') + #Alongshore Position [km]
+  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0),
                   labels = unit_format(unit = "", scale = 0.001)) + # 
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
         axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_text(size = 12, face = 'bold'),#element_blank(), #element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 12, face = 'bold'),
         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
@@ -466,7 +443,7 @@ p <-ggplot(subset(allFiles2, !is.na(deltaCoast) & !(pos %in% posToExclude)),
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-p
+# p
 
 legend <- get_legend(p)
 
@@ -477,30 +454,51 @@ kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/shapes'),
                     layer = 'class10_line')
 
 shapefile_df <- fortify(kustlijn)
+shapefile_df$class <- NA
+
+# class(shapefile_df$id)
+
+shapefile_df$class[which(shapefile_df$id %in% c(3,2))] <- 'east'
+shapefile_df$class[which(shapefile_df$id %in% c(0,1,4))] <- 'center'
+shapefile_df$class[which(shapefile_df$id %in% c(5,6))] <- 'west'
+
+# change order
+shapefile_df$class <- factor(shapefile_df$class, levels = c("west", "center", "east"))
 
 floor_dec <- function(x, level=1) round(x - 5*10^(-level-1), level)
 ceiling_dec <- function(x, level=1) round(x + 5*10^(-level-1), level)
 
 mapped <- ggplot() +
   geom_path(data = shapefile_df, 
-            aes(x = long, y = lat, group = group)) +
-  geom_point(aes(x = poiOriginX,  y = poiOriginY), colour = 'red', 
+            aes(x = long, y = lat, group = group, colour = class)) +
+  geom_point(aes(x = poiOriginX,  y = poiOriginY), colour = 'red',
              size = 3) +
   scale_x_continuous(limits=c(-57.1, -53.95),
                      expand = c(0,0)) +
   scale_y_continuous(breaks=c(5.8, 6.0)) +
+  scale_color_manual(values = c("#E7B800", "#2E9FDF", "#33a02c"),
+                     labels = c('West                                           ',
+                                'Center                         ', 
+                                'East')) +
+  guides(colour=guide_legend(ncol=3, label.position = "right")) + #keywidth = 0.5, default.unit = 'inch'
+
   geom_text() +
-  annotate("text", label = as.roman(1:length(poiOriginX)), 
-           x = poiOriginX, 
-           y = poiOriginY-0.15, 
+  annotate("text", label = as.roman(1:length(poiOriginX)),
+           x = poiOriginX,
+           y = poiOriginY-0.15,
            size = 4, colour = "red") +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),
         axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
+        axis.title.x = element_text(size = 14, face = 'bold', hjust = 0.4),
         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.title = element_blank(),
+        legend.position = c(.5, -.3),
+        legend.background = element_rect(fill = NA,  colour = NA),
+        legend.text = element_text(size = 10, face = "bold", margin = margin(r=30, unit = "pt")),
+        # legend.spacing.x = unit(7.0, 'cm'),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
@@ -512,7 +510,6 @@ map_projected <- mapped +
   coord_map()
   # scale_x_continuous(limits=c(-57.1, -53.95),
                      # expand = c(0,0))#, limits=c(0,30000),)
-
 
 left2 <- plot_grid(p, aggregatedPos, mapped, ncol = 1, align = 'v',
                    nrow = 3, rel_heights = c(2.5, 1, 0.5),         # adjust lay out 
@@ -534,16 +531,32 @@ final <- plot_grid(left2, right, align = 'h', ncol = 2,
   theme(panel.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'))
 
 final
+# 
+# ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
+#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# 
 
-ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
-                         format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+graphicalAbstractLeft <- plot_grid(p,mapped, ncol = 1, align = 'v',
+                               nrow = 2, rel_heights = c(2.5, 0.5))
+graphicalAbstract <- plot_grid(graphicalAbstractLeft, legend, ncol = 2,
+                              rel_widths = c(2.5, 0.5)) + 
+  theme(panel.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'))
 
+# graphicalAbstract
+# 
+# ggsave(plot = graphicalAbstract, 
+#        filename = paste0("./results/temp_maps/", 'graphicalAbstract_',
+#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
-
+#make sure only bottom (final) plot gets a legend
+plotcounter <- 1
 
 for (position in posOfInterest){
-  subsetPos <- subset(allFiles2, pos == position)
+  # position <- posOfInterest[3]
+  
+  subsetPos <- subset(allFiles, pos == position)
   coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
   
   # all years considered a mudbank
@@ -563,6 +576,11 @@ for (position in posOfInterest){
                            ymin = coastDistRange[1],
                            ymax = coastDistRange[2])
   
+  
+  legendPos <- as.character(ifelse(plotcounter == length(posOfInterest),
+                                   'bottom',
+                                   'none'))
+  
   twoDPlot <- ggplot(subsetPos, 
                      aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + 
     geom_rect(data = dateFrames, inherit.aes = FALSE,
@@ -579,44 +597,119 @@ for (position in posOfInterest){
                        values = c('red', 'blue'),
                        labels = c("outlier", "coastal distance")) +
 
+
+    
     scale_x_date(labels = date_format("%Y")) +
-    ggtitle( paste0('position: ', position)) +
-    labs(x = "year", y = "Distance coastline position") +
+    # guides(colour=guide_legend(ncol=2)) +
+    ggtitle( paste0('position: ', position/1000)) +
+    labs(x = "year", y = "coastline position [m]") +
     theme(axis.line.x = element_line(size = 0.5, colour = "black"),
           axis.line.y = element_line(size = 0.5, colour = "black"),
           axis.line = element_line(size= 1, colour = "black"),
-          axis.title.y = element_text(size = 12, face = 'bold'),
-          axis.title.x = element_text(size = 12, face = 'bold'),
-          axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-          axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-          legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-          legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-          legend.text = element_text(size = 12),
-          plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                    vjust = -5), 
+          axis.title.y = element_text(size = 20, face = 'bold'),
+          axis.title.x = element_text(size = 20, face = 'bold'),
+          axis.text.x = element_text(size = 16,  hjust = .5, vjust = .5),
+          axis.text.y = element_text(size = 16, hjust = .5, vjust = .5),
+
+          # legend
+          legend.title = element_blank(),
+          legend.background = element_rect(fill = alpha('#d9d9d9', 0.7),  
+                                           colour = '#d9d9d9'),
+          legend.text = element_text(size = 20),
+          legend.position = legendPos,#c(.85, .28),
+          
+          plot.title = element_text(hjust = 0.5, size = 25, face = 'bold',
+                                    vjust = -1), 
           panel.grid.major = element_blank(), # remove grid lines
           panel.grid.minor = element_blank(), 
           panel.background = element_blank(),
-          plot.background = element_rect(fill = '#d9d9d9'))
+          plot.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'),
+          
+          panel.border = element_blank())
 
   # twoDPlot
   
-  ggsave(plot = twoDPlot, filename = paste0("./results/temp_maps/", 'Suriname_pos_', position, '_1985_2020_',
-  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-  width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-  
+  # ggsave(plot = twoDPlot, filename = paste0("./results/temp_maps/", 
+  #                                           'Suriname_pos_', position, 
+  #                                           '_1985_2020_',
+  #                                           format(Sys.Date(), "%Y%m%d"),
+  #                                           '.jpeg'),
+  #         width = 8.5, height = 3.7, units = c('in'), dpi = 1200)
+  #width = 13.1, height = 7.25
+  plotcounter <- plotcounter + 1
 }
+# 
 
 
 
+# plot alongshore variability of mud fractions
+# allFiles$meanMud # SmoothedPeakFract
+range <- round(quantile(subset(allFiles, 
+                               !is.na(meanMud) & 
+                                 #allFiles$mudbank_outlier <1 &
+                                 meanMud > 0 )$meanMud,c(0.05,0.5, 0.99), 
+                        na.rm=T), 2)
+
+# for faster plotting...
+fractiontable <- subset(allFiles,!is.na(SmoothedPeakFract) & 
+                          SmoothedPeakFract > 0)  %>%
+  dplyr::group_by(year_col, pos) %>% # quarterly_col
+  dplyr::summarize(mean_val = mean(SmoothedPeakFract, na.rm = T)) %>%
+  ungroup()
+
+range <- round(quantile(fractiontable$mean_val,c(0.01,0.6, 0.99), 
+                        na.rm=T), 2)
 
 
+# alongshore variation of mud fractions
+hovmoller <-
+  ggplot(subset(fractiontable, mean_val >= 0 & !(pos %in% posToExclude)),
+         aes(x = pos,y = as.Date(year_col), fill=mean_val))+
+  # ggplot(subset(allFiles, !is.na(meanMud) & meanMud > 0
+  #                         & !(pos %in% posToExclude)),
+  #                  aes(x = pos,y = as.Date(quarterly_col), fill=meanMud))+
+  geom_tile(color= "white",size=0.1, na.rm = TRUE) + 
+  scale_fill_gradient2(limits = c(range[[1]], range[[3]]),
+                       breaks = c(range[[1]], range[[2]], range[[3]]),
+                       high = "#543005", low ='#313695', mid = '#f7f7f7', # '#7b3294', '#f7f7f7', "#008837"
+                       midpoint = range[[2]],
+                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+                       draw.llim = FALSE),
+                       oob=squish, na.value = NA,
+                       name = c('Mean Fraction')) + #"grey50"
+  
+  geom_rect(data = rectangles, inherit.aes = FALSE,
+            aes(xmin = xmin, xmax = xmax,
+                ymin = ymin,
+                ymax = ymax, colour = colour), fill = NA, size = 1) + 
+  scale_colour_manual(name = ' ', values = c("black"),
+                      labels = c('mudbank'),
+                      guide = guide_legend(ncol = 2))+
+  
+  labs(y = 'Date', x = 'Position [km]') +
+  
+  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0),
+                  labels = unit_format(unit = "", scale = 0.001)) +
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 18, face = 'bold'),
+        axis.title.x = element_text(size = 18, face = 'bold'),
+        axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
+        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+        legend.title = element_text(colour = 'black', size = 20, face = "bold"),
+        legend.text = element_text(size = 16),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+
+hovmoller
+
+ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_yearly_1985_2020_',
+        format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
-
-
-
-
-
-# 2d dimensional plot corresponding to the point of interest 
 

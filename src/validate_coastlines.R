@@ -57,7 +57,7 @@ years <- seq(from = 2015, to = 2020, by = 1)
 
 
 exportSwitch <- F # or F when exporing images in GEE not necessary
-aoi <- c('Braamspunt','WegNaarZee') # WegNaarZee / Braamspunt
+aoi <- c('WegNaarZee','Braamspunt') # WegNaarZee / Braamspunt
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
 df <- rewrite(folderSelect);
@@ -69,7 +69,7 @@ df <- df[grep('.csv', folderSelect, ignore.case = T),]
 reference_dates <- c('2019-06-20','2019-07-13','2019-07-24','2020-02-03',
                      '2020-02-19', '2020-02-03')
 # reference_dates <-  c('2019-07-13')                         # weg naar zee East
-# reference_dates <-  c('2019-06-20') #2019-06-20, 2020-02-19    # Weg Naar Zee West
+# reference_dates <-  c('2020-02-19') #2019-06-20, 2020-02-19    # Weg Naar Zee West
 # reference_dates <-  c('2020-02-03') # 2020-02-03, 2019-07-24    # Braamspunt
 
 
@@ -188,6 +188,10 @@ output <- data.frame(distance=double(),
            uavdate = character(),
            shapeName = character(),
            pattern = character(),
+           label = character(),
+           meanDist = double(),
+           dayDifference = double(), 
+           aoi = character(),
            stringsAsFactors=FALSE)
 # 
 # scenarios <- c()
@@ -299,17 +303,14 @@ allLines <- vector('list', nrow(filtered))
 # im <- scenarios[4]
 for (groupScenario in unique(scenarioTable$referenceDate)){
   # groupScenario <-  unique(scenarioTable$referenceDate)[1]
-  allObs <- subset(scenarioTable, scenarioTable$referenceDate ==groupScenario)
+  allObs <- subset(scenarioTable, as.character(scenarioTable$referenceDate) == groupScenario)
   
+  
+  
+  # landsat observation dates
   observationDates <- as.character(unique(allObs$acquisitionDate))
   posVals <- unique(allObs$posrange)
   
-  # all coastline Points detected in landsat images
-  # coastlines_selection <-subset(allFiles, 
-                                # (allFiles$DATE_ACQUIRED %in% 
-                                  # observationDates) &
-                                # allFiles$coastX != 0 &
-                                # (pos %in% posVals))
   # subset filtered such that only relevant shapes (braamspunt/WnZ are selected)?
   # and only correct year
   files <- filtered %>% 
@@ -330,14 +331,23 @@ for (groupScenario in unique(scenarioTable$referenceDate)){
     file <- files[f,1]
     strings<- str_split(file, '/')[[1]]
     shape <- gsub(x=strings[6] ,pattern=".shp",replacement="",fixed=T)
-    
+
     # extract details
     pattern <- str_split(shape, "_")[[1]][3:4]
     uavdate <-  str_split(strings[6], "_")[[1]][1]
     coastline <- readOGR(paste0(strings[1:5], collapse ='/' ),
                          shape, verbose = F)
 
+    dayDif <- as.numeric(lubridate::ymd(as.character(uavdate)) - as.Date(dates))
+    
+    
     # class(coastline) ==> spatialLines DataFrame 'sp'
+    plotLabel <- ifelse(pattern[1] %in% c('mudVeg', 'sandVeg'),
+                        as.character('Vegetation'),
+                        ifelse(pattern[1] == c('dryWet'),
+                               as.character('HWL'),
+                               as.character('MHW')))
+    
     
     # define CRS
     line <- spTransform(coastline, CRS("+proj=longlat +datum=WGS84"))
@@ -366,10 +376,14 @@ for (groupScenario in unique(scenarioTable$referenceDate)){
     if(length(pointsOfInt) == 0){next}
 
     allLines[[f]] <- coastline
-    testDist <- cbind(data.frame(dist2Line(pointsOfInt, line, distfun=distGeo)), 
+    distances <- data.frame(dist2Line(pointsOfInt, line, distfun=distGeo))
+    
+    testDist <- cbind(distances, 
                         pos = pointsOfInt$pos, DATE_ACQUIRED = pointsOfInt$DATE_ACQUIRED, 
                         uavdate, shape, pattern = paste0(pattern[1:2], collapse ='_'), 
-                        coastX = pointsOfInt$coastX, coastY = pointsOfInt$coastY)
+                        coastX = pointsOfInt$coastX, coastY = pointsOfInt$coastY,
+                      label = plotLabel, meanDist = mean(distances$distance),
+                      dayDifference = dayDif, aoi = as.character(unique(allObs$aoi)))
       
     output<-rbind(output,unique(testDist))
     }
@@ -447,48 +461,100 @@ for (groupScenario in unique(scenarioTable$referenceDate)){
 
 # 10^1.2
 
+output <- subset(output, pattern != c('dike_NA'))
 
+# allUAV_estimated accuracy
 totalBox <- ggplot(output, aes(x=as.factor(shape), y = distance,
-                   fill = uavdate)) +
-  facet_wrap(~pattern, ncol = 5, scales = "free_x") +
+                   fill =  as.factor(lubridate::ymd(as.character(uavdate))))) + # ymd(as.character(uavdate)))
+  facet_wrap(~label, ncol = 3, scales = "free_x") +
+  
+
+  # scale_fill_discrete()
   geom_hline(yintercept = 30) +
   geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6,
-             position=position_dodge(width = 1)) +
-  stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.5, vjust = 2.25,angle = 45,
-               position = position_dodge2(1)) +
+               position=position_dodge(width = 1)) +
+  stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.5, vjust = 2.25,
+               angle = 45, position = position_dodge2(1)) +
   
-  scale_y_continuous( breaks = c(0, 30, seq(100,round(max(output$distance), -2),100))) +
+  scale_y_continuous(breaks = c(0, 30, seq(100,round(max(output$distance), -2),100))) +
+  ylab('offset [m]') +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
     axis.line.y = element_line(size = 0.5, colour = "black"),
     axis.line = element_line(size=1, colour = "black"),
     axis.text.x = element_blank(),
-    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
-    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.y = element_text(color = "grey20", size = 20, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 20, face = 'bold', vjust = 1),
     axis.title.x = element_blank(),
     
-    
+    strip.background = element_rect(fill = "white", colour = "white"),
     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.key = element_rect(fill = NA),
-    legend.text = element_text(size = 14),
-    # legend.position = c(.7, .3),
-    legend.title =  element_blank(),#element_text(colour = 'black', size = 20, face = 'bold'),
+    legend.text = element_text(size = 20),
+    legend.position = c(.91, .75),
+    legend.title =  element_blank(),
     
     panel.border = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     panel.background = element_blank(),
     panel.spacing.x = unit(2, 'lines'),
-    strip.background = element_rect(fill = "#d9d9d9", colour = "white"),
-    # strip.text.x = element_blank(),#element_text(size = 16, face = 'bold') # Facet titles
+    
+    strip.text.x = element_text(size = 20, face = 'bold'), # Facet titles
     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
   )
 
 totalBox
-# allUAV_estimated accuracy
+
 # ggsave(totalBox, filename = paste0("./results/Validation/", 'allUAV_estimated_accuracy',
-#                          '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+# width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+meanVals <- output %>%
+  dplyr::group_by(aoi, label) %>%
+  dplyr::summarize(mean_val = mean(meanDist))
+
+
+daysFromObs <- ggplot(output, aes(x = dayDifference, y = meanDist,
+                                  fill = as.factor(label), 
+                                  colour = as.factor(label))) +
+  geom_point(size = 3) +
+  geom_hline(data = meanVals, aes(yintercept = mean_val, colour = as.factor(label)),
+             linetype = 'dashed', size = 1.5) +
+  xlab('Time difference [days]') +
+  ylab('Average offset [m]')+
+  facet_wrap(~aoi) +
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 20, hjust = .5, vjust = .5, face = "bold"),
+    axis.text.y = element_text(color = "grey20", size = 20, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 20, face = 'bold', vjust = 1),
+    axis.title.x =element_text(size = 20, face = 'bold', vjust = 1),
+    
+    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 20),
+    legend.position = c(.91, .75),
+    legend.title =  element_blank(),
+    
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    
+    strip.background = element_rect(fill = NA, colour = NA),
+    strip.text.x = element_text(size = 20, face = 'bold'), # Facet titles
+    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')
+  )
+daysFromObs
+
+ggsave(daysFromObs, filename = paste0("./results/Validation/", 'allUAV_mean_accuracy',
+'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
 
 # controls the panels
 facet <- 'uavdate'  
@@ -527,17 +593,19 @@ output2$ordered_date <- as.character(output[order(as.Date(output$DATE_ACQUIRED))
 colours <- c('#6a51a3', '#e935a1', '#66a61e','#d95f02','#e6ab02','#537eff','#666666','#a65628')
 
 # what are the patterns to include on the x-axis
-unique(output2$pattern)
+# unique(output2$pattern)
+
+
 
 boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance, 
                              fill = eval(as.name(boxes)))) +
   
   # some hacky examples to override x-axis for categorial
-  facet_wrap_custom(paste0('~', xaxis), scales = "free_x", ncol = 4, scale_overrides = list(
-    scale_override(1, scale_x_discrete(labels = c('High-tide'))),
-    scale_override(2, scale_x_discrete(labels = c('Dike'))),
-    scale_override(3, scale_x_discrete(labels = c('Dry-wet'))),
-    scale_override(4, scale_x_discrete(labels = c('Mud-vegetation')))
+  facet_wrap_custom(paste0('~', xaxis), scales = "free_x", ncol = 3, scale_overrides = list(
+    scale_override(1, scale_x_discrete(labels = c('MHW'))),
+    # scale_override(2, scale_x_discrete(labels = c('Dike'))),
+    scale_override(2, scale_x_discrete(labels = c('HWL'))),
+    scale_override(3, scale_x_discrete(labels = c('vegetation')))
   )) +
   # facet_wrap(paste0('~', xaxis), ncol = 4, scales = "free_x",
   #            labeller = labeller(as.name(xaxis) = dose.labs)) +
@@ -551,20 +619,20 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
   labs(y = "Error [m] \n", x = ' ', fill = boxes) + 
   geom_hline(yintercept = 30, linetype="dashed") +
   scale_y_continuous( breaks = c(0, 30, seq(100,round(max(output2$distance), -2),100))) +
-  guides(fill=guide_legend(ncol=3)) +
+  guides(fill=guide_legend(ncol=2)) +
   theme(
     axis.line.x = element_line(size = 0.5, colour = "black"),
     axis.line.y = element_line(size = 0.5, colour = "black"),
     axis.line = element_line(size=1, colour = "black"),
-    axis.text.x = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
-    axis.text.y = element_text(color = "grey20", size = 14, hjust = .5, vjust = .5, face = "bold"),
-    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(color = "grey20", size = 20, hjust = .5, vjust = .5, face = "bold"),
+    axis.text.y = element_text(color = "grey20", size = 20, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 20, face = 'bold', vjust = -3),
     
     strip.background = element_rect(fill = "white", colour = "white"),
     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
     legend.key = element_rect(fill = NA),
-    legend.text = element_text(size = 14),
-    legend.position = c(.7, .8),
+    legend.text = element_text(size = 20),
+    legend.position = c(.75, .5),#c(.75, .91),
     legend.title =  element_blank(),#element_text(colour = 'black', size = 20, face = 'bold'),
     
     panel.border = element_blank(),
@@ -580,9 +648,9 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
 boxplot
 
 datesForExport <- paste0(unique(format(as.Date(reference_dates), "%Y")), collapse = '_')
-# ggsave(filename = paste0("./results/Validation/", unique(scenarioTable$aoi), '_',datesForExport, '_coastlines_',
-#         '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+ggsave(filename = paste0("./results/Validation/", unique(scenarioTable$aoi), '_',datesForExport, '_coastlines_',
+        '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # read transects
 # transects <- rewrite(as.matrix(list.files(paste0('./data/raw/shapes/transects')), full.names = T)) %>%
@@ -660,10 +728,10 @@ for (ir in 1:nrow(file)){
     # scale_x_continuous(labels = scaleFUN)+
       # coord_cartesian(xlim=c(-55.171, -55.153),
       #   ylim = c(5.941, 5.96)) +
-    # coord_cartesian(xlim=c(xlimits[1], xlimits[2]),
-                    # ylim = c(ylimits[1], ylimits[2])) +
+    coord_cartesian(xlim=c(unique(scenarioTable$xlimt0), unique(scenarioTable$xlimit1)+0.001),
+    ylim = c(unique(scenarioTable$ylimit0), unique(scenarioTable$ylimit1))) +
       
-
+    
     
     theme(panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", 
                                           size = 0.5),
@@ -671,7 +739,7 @@ for (ir in 1:nrow(file)){
           plot.title = element_blank(), #element_text(hjust = 0.5, size = 18, face = 'bold',
                                       #vjust = 0),
           strip.background = element_rect(fill=colours[ir]),
-          strip.text = element_text(size=25, colour="white", face = 'bold'),
+          strip.text = element_text(size=50, colour="white", face = 'bold'),
           
           axis.line.x = element_line(size = 0.5, colour = "black"),
           axis.line.y = element_line(size = 0.5, colour = "black"),
