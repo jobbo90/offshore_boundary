@@ -48,9 +48,6 @@ __pycache__/
 *.mp4
 
 # exclude data from source control by default
-/data/temp
-/data/raw
-# exclude everything
 /data/*
 
 # exception to the rule
