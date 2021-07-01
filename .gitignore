@@ -54,7 +54,6 @@ __pycache__/
 # exclude data from source control by default
 #/data/**/.tif
 /data/*
-#/data/raw/GEE_exports/GIF/pos210000/*
 
 # exception to the rule
 /data/**/.gitkeep
@@ -65,7 +64,7 @@ __pycache__/
 #/results/GIF/frames
 #/results/GIF/frames_156000
 #/results/GIF/frames_230000
-#/results/Validation
+!/results/Validation
 
 
 .Rproj.user
