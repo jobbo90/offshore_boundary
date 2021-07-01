@@ -45,6 +45,10 @@ In order to create coastline position estimates and quantify annual changes with
 5. post-process the estimated coastline postions in R
 6. post-process mud abundances for estimating the pressence or absence of mudbanks in R
 
+steps 1 - 4 are explained in the GEE repository. The data in data/raw/GEE_exports shows the results for Suriname. 
+In step 5 - 6 this data is used for post-processing. 
+
+The result is visualized for Suriname in the GEE repository
 
 ## License
 
