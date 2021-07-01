@@ -26,11 +26,10 @@ __pycache__/
 *.db
 *.rdb
 
-# Pycharm
-.idea
-
-# IPython NB Checkpoints
-.ipynb_checkpoints/
+# R-files
+**/.Rhistory
+**/.RData
+**/.Rproj.user
 
 # exclude compiled binaries and external models
 /bin
@@ -41,7 +40,6 @@ __pycache__/
 *.shp
 *.shx
 
-
 # other 
 *.csv
 *.png
@@ -50,8 +48,13 @@ __pycache__/
 
 # exclude data from source control by default
 /data/temp
-/data/processed
 /data/raw
+# exclude everything
+/data/processed/coastlines/*
+
+# exception to the rule
+/data/processed/coastlines/.gitkeep 
+
 /results/temp_maps
 /results/GIF/frames
 /results/GIF/frames_156000
@@ -59,7 +62,4 @@ __pycache__/
 /results/Validation
 /data/processed/validation/WegNaarZee
 /data/processed/validation/Braamspunt
-*.Rhistory
-*.RData
-*.Rproj.user
 
