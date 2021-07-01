@@ -168,7 +168,8 @@ allFiles_mutate <- allFiles_dropPOS
 
 # test simple 2d plot 
 # 137000 138000 Braamspunt / 156000 WnZ
-twoD_pos <- 138000#156000#230000#138000#299000
+posOfInterest <- c(50000, 210000, 310000)
+twoD_pos <- 50000#156000#230000#138000#299000
 subset2d_for_testPlot <- subset(allFiles_mutate, pos == twoD_pos)
 
 # plot temporal evolution for given transect
@@ -207,7 +208,7 @@ expextent <- ee$Geometry$LinearRing(list(c(ext@xmin, ext@ymin), c(ext@xmax, ext@
                                    'EPSG:4326', F)
 bboxForPlot <- Map$addLayer(expextent)
 
-m1 <- mapview(ext)
+# m1 <- mapview(ext)
 m2 <- mapview(bbox_buf)
 m3 <- mapview(coastlines_selection_sp,  col.regions = c('red'))
 m4 <- m2 + m3
@@ -232,10 +233,13 @@ opt_namesL8 <- c("Blue", "Green", "Red", "NIR", "SWIR1", "SWIR2" )
 
 # get all images for download
 # https://rdrr.io/github/r-spatial/rgee/man/ee_imagecollection_to_local.html
-potential_dates <- nonOutliers$DATE_ACQUIRED
+# potential_dates <- nonOutliers$DATE_ACQUIRED
 
-for(da in ic_names){
-  # da <- ic_names[191]
+retry <- which(as.Date(ic_names) > as.Date(c('2009-01-01')) & 
+        as.Date(ic_names) < as.Date(c('2014-01-01')) )
+
+for(da in ic_names[retry]){
+  # da <- ic_names[212]
   # da <- '2013-05-02'
   # da <- '2009-09-28'
   

@@ -40,11 +40,19 @@ source("./src/functions.R")
 ## ---------------------------
 
 years <- c(seq(1985, 2020, 1))
-aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee
+aoi <-  c('Guyana') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
 
 # pos to exlcude for mudbank boundary estimates / outlier detection
-posToExclude <- c(seq(138000,147000,1000),
+posToExcludeSUR <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
+
+
+posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
+                    seq(315000,3340000,1000),# baia oiapoque 
+                    seq(223000,2250000,1000), # orapu
+                    seq(205000,2070000,1000) # cayenne
+                    ) 
+posToExclude <- c(0)
 
 # outlier detection parameters for mudbanks
 initialSearchWindow <- 25            # amount of
@@ -87,6 +95,12 @@ mudbanks <- do.call(bind_rows,
                                 na.strings=c("","NA")))
                          )
 
+# all dates
+uniqueDates <- unique(mudbanks$DATE_ACQUIRED)
+
+all_years <- unique(mudbanks$year_col)
+group_pos <- unique(mudbanks$pos)
+
 # calculate mudbank extents (relative, abs and slope drop extents)
 mudbanks$mudbank_extent <- mudbanks$axisDist - mudbanks$coast_median  
 mudbanks$mudbank_extent_abs <- mudbanks$axisDistAbs - mudbanks$coast_median  
@@ -126,16 +140,23 @@ mudbanks2 <- mudbanks %>%
                                     Mode(mudbankObs), mudbankObs)) %>%
   ungroup()
 
+mudbanks2$x <- -1
+mudbanks2$y <- -1
 # reshape mudbanks such that each relative, absolute and slope drop gets it own data-entry for each pos
 # so triplicate each row and overwrite the values in the corresponding columns
 # transform such that for each pos all three coordinates become a separate entry with unique x,y coords
-mudbanks2$x <- -1
-mudbanks2$y <- -1
 
+
+subsetPos <- subset(mudbanks2, (pos == 153000 & DATE_ACQUIRED == "2013-10-27"))
+# get duplicates: same date & pos 
+duplicate <- mudbanks2 %>% 
+  group_by_at(vars(DATE_ACQUIRED, pos)) %>% 
+  filter(n()>1) %>% 
+  ungroup()
 
 mudbanks3 <- mudbanks2 %>%
   slice(rep(1:n(), each = 3)) %>%     # triplicate each row
-  dplyr::group_by(pos, DATE_ACQUIRED) %>%
+  dplyr::group_by(pos, DATE_ACQUIRED,areaName) %>%
   dplyr::mutate(dropClass = c("rel", "abs", 'slope')) %>% # assign a column indicating the type of drop
   dplyr::ungroup() %>%
   dplyr::group_by(pos,DATE_ACQUIRED) %>%
@@ -158,9 +179,6 @@ mudbanks3 <- mudbanks2 %>%
                    mudbank_extent_slope, mudbank_extent_abs,
                    peakCoordX, peakCoordY)) %>%
   dplyr::ungroup()
-
-# all dates
-uniqueDates <- unique(mudbanks3$DATE_ACQUIRED)
 
 
 # for each imagedate; test for obvious mudbank boundary outliers
@@ -441,7 +459,7 @@ for (i in uniqueDates){
                              pos = mudbanks_selection$pos[indicesToDrop],
                              dropClass = mudbanks_selection$dropClass[indicesToDrop]))
   
-  rownr <- c() # row numbers in the mudbanks that correspond to the combinations
+  rownr <- c() # row numbers in the mudbanks that correspond to these combinations
   for(r in seq(nrow(combinations))){
     
     # look up every combination
@@ -450,7 +468,7 @@ for (i in uniqueDates){
                                   mudbanks3$dropClass == combinations[r,3]))
   }
   
-  # again update mudbank Selection by removing 
+  # again update mudbank Selection by removing outliers
   mudbanks_selection <- mudbanks_selection[-indicesToDrop, ]
   indicesToDrop2 <- c(0) # for the final bit
 
@@ -470,7 +488,7 @@ for (i in uniqueDates){
     combined <- combined[order(as.numeric(as.character(combined$pos))),]
 
     positions <- as.numeric(as.character(combined$pos))
-    distances <-combined$mudbank_extent #axisDist # grap the (normalized???) distances
+    distances <- combined$mudbank_extent #axisDist # grap the (normalized???) distances
     fractions <- combined$mudFract
     dropClass <- combined$dropClass
     
@@ -479,7 +497,7 @@ for (i in uniqueDates){
                            x=combined$x, y = combined$y)
 
       # sufficient positions that contain information: determine outliers
-    if (length(unique(datatest$positions)) > 2) {
+    if (length(unique(datatest$positions)) > 2 & length(unique(datatest$distances)) > 2) {
       
       # # calculate linear fit
       lm.out_lin <- lm(datatest$distances~as.numeric(datatest$positions))
@@ -512,20 +530,25 @@ for (i in uniqueDates){
 
     # test the selected position index of the outlier
     # if it is selected point of interest; consider it as outlier 
-    if (outlier$positions == unique(selected_point$pos)){
-      # print(paste0('true for pos: ', unique(selected_point$pos)))
+    
+    if(length(outlier$positions) > 0){
+      if (outlier$positions == unique(selected_point$pos)){
+        # print(paste0('true for pos: ', unique(selected_point$pos)))
+        
+        # row numbers of the outliers in the original dataFrame
+        rownr <- rbind(rownr, which(mudbanks3$DATE_ACQUIRED == i &
+                                      mudbanks3$pos == outlier$positions &
+                                      mudbanks3$dropClass == outlier$dropClass))
+        
+        # row number of the outliers in the subset used in this loop
+        indicesToDrop2 <- rbind(indicesToDrop2, 
+                                which(mudbanks_selection$DATE_ACQUIRED == i &
+                                        mudbanks_selection$pos == outlier$positions &
+                                        mudbanks_selection$dropClass == outlier$dropClass))
+      }
       
-      # row numbers of the outliers in the original dataFrame
-      rownr <- rbind(rownr, which(mudbanks3$DATE_ACQUIRED == i &
-                                    mudbanks3$pos == outlier$positions &
-                                    mudbanks3$dropClass == outlier$dropClass))
-      
-      # row number of the outliers in the subset used in this loop
-      indicesToDrop2 <- rbind(indicesToDrop2, 
-                              which(mudbanks_selection$DATE_ACQUIRED == i &
-                                    mudbanks_selection$pos == outlier$positions &
-                                    mudbanks_selection$dropClass == outlier$dropClass))
     }
+
   }
   
   # also here overwrite the amount of observations that are not an outlier
@@ -564,9 +587,6 @@ mudbanks5 <- mudbanks4 %>% # annual_obs %>%
       validMudbankObs/mudbankObs > 0.66 ~ 0, 
       TRUE ~ 1)) %>% 
   ungroup()
-
-all_years <- unique(mudbanks5$year_col)
-group_pos <- unique(mudbanks5$pos)
 
 mudbanks5$distX <- NA
 mudbanks5$distY <- NA
@@ -619,6 +639,18 @@ for(y in 1:length(all_years)){
 }
 
 
+# set NA to -1?
+mudbanks6 <- mudbanks5 %>%
+  dplyr::group_by(pos, year_col) %>%
+  
+  dplyr::mutate(distX = ifelse(is.na(distX), # replace NA with the calculated annual mudbank position
+                                    Mode(distX), distX)) %>%
+  dplyr::mutate(distY = ifelse(is.na(distY), # replace NA with the calculated annual mudbank position
+                               Mode(distY), distY)) %>%
+  dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), # replace NA with the calculated annual mudbank position
+                               Mode(medianOffshore), medianOffshore)) %>%
+  ungroup()
+
 # export 
 for (year in unique(format(as.Date(uniqueDates), '%Y'))){
   # year <- 2000
@@ -626,9 +658,29 @@ for (year in unique(format(as.Date(uniqueDates), '%Y'))){
   start_year <- as.Date(ISOdate(year, 1, 1))
   end_year <- as.Date(ISOdate(year, 12, 31)) 
   
-  mudbanks_per_year <-subset(mudbanks5,
+  mudbanks_per_year <-subset(mudbanks6,
                              as.Date(DATE_ACQUIRED) >= start_year &
                              as.Date(DATE_ACQUIRED) <= end_year)
+  
+  testForExport <- mudbanks_per_year %>% 
+    dplyr::select(c(maxExtentX, maxExtentY, pos,DATE_ACQUIRED,SmoothedPeak,
+                    axisDist, mudbank_outlier, validMudbankObs, dropClass,
+                    distX, distY, medianOffshore)) %>%
+    dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), -1, coastDist))
+  
+  sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
+  
+  
+  fileN <- paste0(aoi,'_',year,'_coastlines')
+  assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
+  
+  task_vect <- ee_table_to_asset(
+    collection = sf_to_ee,
+    description = fileN,
+    assetId = assetid,
+    overwrite = TRUE
+  )
+  task_vect$start()
 
   write_csv(mudbanks_per_year, paste0(wd,"/data/processed/offshore_points/", aoi,
                                       '_', year, '_offshore.csv'))

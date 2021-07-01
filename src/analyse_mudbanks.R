@@ -88,10 +88,6 @@ allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
                                                               na.strings=c("","NA")
                                                               ))))
 
-allFiles$distX <- NA
-allFiles$distY <- NA
-allFiles$medianOffshore <- NA
-
 #'
 #' create an image collection
 #' 
@@ -184,8 +180,6 @@ outlierPos <- sp_pnt_ee(mudbank_selection_Outlier$x,
 #' 
 #' 
 
-uniqueDates[which.min(abs(as.Date(uniqueDates) - as.Date("2009-11-3")))]
-
 reference_date <- as.Date(c("2009-09-12")) #as.Date("2003-11-15") 
 subsetSelectedDates <- subset(allFiles, as.Date(DATE_ACQUIRED) %in% reference_date)
 facet <- 'DATE_ACQUIRED'
@@ -224,17 +218,6 @@ alongshoreFracts
 #        width = 20.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
-mudbankPos <- sp_pnt_ee(subset(subsetSelectedDates, mudbank_outlier == 0)$x,
-                        subset(subsetSelectedDates, mudbank_outlier == 0)$y,  
-                        'non outlier abs', "#ece7f2")
-
-outlierPos <- sp_pnt_ee(subset(subsetSelectedDates, mudbank_outlier == 1)$x,
-                        subset(subsetSelectedDates, mudbank_outlier == 1)$y,  'outlier',
-                        "orange")
-# first + mudbankPos + outlierPos
-
-
-
 #'
 #' select 1 year as example
 #'  for plotting purposes
@@ -253,16 +236,16 @@ Map$centerObject(filtCollectAnnual$first(), 11)
 addComposite <- Map$addLayer(composite, visParams, paste0('landsat: ',dateForTest))
 
 # now all obs within the selected year
-annual_obs <- subset(allFiles2,  
+annual_obs <- subset(allFiles,  
                      as.Date(year_col) == dateForTest &
                        !(pos %in% posToExclude))
 
-annual_obs_nonOutlier <- subset(allFiles2,  
+annual_obs_nonOutlier <- subset(allFiles,  
                                 as.Date(year_col) == dateForTest &
                                   !(pos %in% posToExclude) &
                                   mudbank_outlier == 0)
 
-annual_obs_outlier <- subset(allFiles2,  
+annual_obs_outlier <- subset(allFiles,  
                              as.Date(year_col) == dateForTest &
                                !(pos %in% posToExclude) &
                                mudbank_outlier > 0)
@@ -297,25 +280,25 @@ annual_obs_filter_sp <- sp_pnt_ee(annual_obs_filter$x,
 
 # addComposite + annual_mudbankPos + annual_outlierPos + annual_obs_filter_sp + meanPos_sp
 posOfInterest <- 50000
-subsetPos <- subset(allFiles2, (pos %in% posOfInterest))
+subsetPos <- subset(allFiles, (pos %in% posOfInterest))
 coastDistRange <- round(quantile(subsetPos$coastDist,c(0.005, 0.99), na.rm=T))
 
 # all years considered a mudbank
 getYears <- unique(subsetPos[subsetPos$noMudbank == 0, 'year_col'])
 
-# sequences <- split(as.Date(getYears$year_col), cumsum(c(0, diff(as.Date(getYears$year_col)) == 365)));
+sequences <- split(as.Date(getYears), cumsum(c(0, diff(as.Date(getYears)) == 365)));
 
-# drop sublist with only x amount of consequetive mudbank observations
-filtSequences <- Filter(function(x){length(x)>3}, sequences)
-
-startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
-endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
-
-dateFrames <- data.frame(id = posOfInterest, fill = NA,
-                         xmin = as.Date(getYears$year_col), 
-                         xmax = as.Date(getYears$year_col) + 365, 
-                         ymin = coastDistRange[1], 
-                         ymax = coastDistRange[2])
+# # drop sublist with only x amount of consequetive mudbank observations
+# filtSequences <- Filter(function(x){length(x)>3}, sequences)
+# 
+# startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
+# endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
+# 
+# dateFrames <- data.frame(id = posOfInterest, fill = NA,
+#                          xmin = as.Date(getYears$year_col), 
+#                          xmax = as.Date(getYears$year_col) + 365, 
+#                          ymin = coastDistRange[1], 
+#                          ymax = coastDistRange[2])
 
 ####
 #'
@@ -323,51 +306,56 @@ dateFrames <- data.frame(id = posOfInterest, fill = NA,
 #'
 #####
 
-# breaks <- seq(0, max(allFiles2$pos), 10000)
-# posLabel <- rollmean(breaks, 2) # set label to middle point of the aggregated groups
-# 
-# allFiles2 <- allFiles2 %>%
-#   #group_by(year_col) %>%
-#   dplyr::mutate(newPos =cut(pos,breaks, right = FALSE, labels = posLabel)) %>%
-#   # dplyr::select(DATE_ACQUIRED, year_col, pos,newPos) %>%
-#   ungroup()
-
-
 # remove duplicate observations to have accurate stats
-allFiles3 <- allFiles2 %>% 
+allFiles3 <- allFiles %>% 
   group_by(as.Date(DATE_ACQUIRED), pos) %>% 
   filter(row_number(pos) == 1) %>%
   ungroup()
 
+# get only 1 observation per year per pos here
+transformed <- allFiles3 %>% 
+  dplyr::group_by(year_col, pos) %>% 
+  dplyr::distinct(deltaCoast, .keep_all = T) %>%
+  # filter(n()>1) %>% 
+  ungroup() %>%
+  dplyr::select(DATE_ACQUIRED, pos, year_col, deltaCoast, noMudbank, 
+                mudbank_outlier)
 
-violinSubset <- subset(allFiles3, mudbank_outlier == 0 & deltaCoast != 0 ) # & deltaCoast != 0 
-# with(violinSubset, levels(interaction(noMudbank))) # check factor levels
 
-medianMudbank <- median(violinSubset$deltaCoast[which(violinSubset$noMudbank == 0)], na.rm = T)
-medianNoMudbank <- median(violinSubset$deltaCoast[which(violinSubset$noMudbank == 1)], na.rm = T)
+# change values only??
+coastalChange <- subset(transformed, deltaCoast != 0 ) # & mudbank_outlier == 0 
+# transformed
+medianMudbank <- median(coastalChange$deltaCoast[which(coastalChange$noMudbank == 0)], 
+                        na.rm = T)
+medianNoMudbank <- median(coastalChange$deltaCoast[which(coastalChange$noMudbank == 1)], 
+                          na.rm = T)
 
-meanMudbank <- mean(violinSubset$deltaCoast[which(violinSubset$noMudbank == 0)], na.rm = T)
-meanNoMudbank <- mean(violinSubset$deltaCoast[which(violinSubset$noMudbank == 1)], na.rm = T)
+meanMudbank <- mean(coastalChange$deltaCoast[which(coastalChange$noMudbank == 0)], na.rm = T)
+meanNoMudbank <- mean(coastalChange$deltaCoast[which(coastalChange$noMudbank == 1)], na.rm = T)
 
 # denisty plot  
-density_mudbank <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 & 
-                                          (deltaCoast < -30 | deltaCoast > 30))) +  
-  # geom_boxplot(aes(x=deltaCoast, y=0.006, fill = as.factor(noMudbank)))+
-  geom_density(adjust = 4, alpha = 0.5, 
-               aes(x=deltaCoast, fill=as.factor(noMudbank))) +
+density_mudbank <- 
+  # ggplot(data = subset(allFiles3, mudbank_outlier == 0 & 
+  #                                         (deltaCoast < -30 | deltaCoast > 30))) +  
+  ggplot(data = coastalChange) +
+  # geom_density(adjust = 1.5, alpha = 0.5,
+  #              aes(x=deltaCoast, fill=as.factor(noMudbank))) +
   
-  # geom_histogram(position = 'identity', binwidth = 25, alpha = 0.5) +
+  geom_histogram(position = 'identity', aes(x=deltaCoast,
+                                            fill=as.factor(noMudbank)),
+                 binwidth = 20, alpha = 0.6) +
   scale_x_continuous(limits=c(-750, 750)) +
+  scale_y_continuous(expand = c(0,0)) +
   guides(fill=guide_legend(override.aes=list(alpha=1))) +
   # 0 = mudbank, 1 = no mudbank
   
   annotate("text", label = paste0('Mean: ', round(meanMudbank)),
              x = 400,
-             y = .003,
+             y = 2000,
              size = 12, colour = "black") +
   annotate("text", label = paste0('Mean: ', round(meanNoMudbank)),
              x = -400,
-             y = .003,
+             y = 2000,
              size = 12, colour = "black") +
   
   scale_fill_manual(labels = c('Mudbank', 'No mudbank'), values = c('#F8766D', '#00BFC4')) +
@@ -384,7 +372,7 @@ density_mudbank <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 &
     legend.key = element_rect(fill = NA),
     legend.text = element_text(size = 25),#element_blank(),
     legend.title =  element_blank(),
-    legend.position = c(.8, .5),
+    legend.position = c(.8, .4),
     
     panel.border = element_blank(),
     panel.grid.major = element_blank(),
@@ -394,12 +382,16 @@ density_mudbank <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 &
     strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
     # strip.text.x = element_text(size = 12), # Facet titles
     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-density_mudbank
+
+# density_mudbank
 # legendDensity <- get_legend(density_mudbank)
 # density_mudbank <- density_mudbank + theme(legend.position = 'none')
 
-boxplot <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 & 
-                                 (deltaCoast < -30 | deltaCoast > 30))) +
+boxplot <- 
+  # ggplot(data = subset(allFiles3, mudbank_outlier == 0 &
+  #                                (deltaCoast < -30 | deltaCoast > 30))) +
+
+  ggplot(data = coastalChange) +
   geom_boxplot(aes(x=deltaCoast, y = noMudbank, fill = as.factor(noMudbank))) +
   scale_fill_manual(labels = c('Mudbank', 'No mudbank'), 
                     values = c('#F8766D', '#00BFC4')) +
@@ -425,17 +417,41 @@ boxplot <- ggplot(data = subset(allFiles3, mudbank_outlier == 0 &
     
     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
   
-boxplot
+# boxplot
 
 final <- plot_grid(density_mudbank, boxplot, align = 'v', ncol = 1, nrow =2,
                    rel_heights = c(2.5, 1.5))
 
-# ggsave(final, filename = paste0("./results/temp_maps/", 'Suriname_coastlineChange_gt30m',
+# ggsave(final, filename = paste0("./results/temp_maps/", 'Suriname_coastlineChange_histogram_',
 #                                 '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
+mudbankObs <- subset(coastalChange, noMudbank == 0)
+NomudbankObs <- subset(coastalChange, noMudbank == 1)
+
+# boxplot(coastalChange$deltaCoast ~ coastalChange$noMudbank, ylim = c(-400,400))
+
+qqplot <- ggplot(NomudbankObs, aes(sample = deltaCoast)) + 
+  stat_qq() +
+  scale_color_manual(values = c("#00AFBB", "#E7B800"))+
+  scale_y_continuous(limits=c(-3000, 3000), name = 'Coastline change [m/yr]')
+  # labs(y = "coastline change [m/yr]")
+
+qqplot
+
+sampleDelta <- sample(allFiles3$deltaCoast, 2500)
+shapiroTest<- shapiro.test(sampleDelta) # P<0.05 ==> not normally distributed
+
+# thus apply wilcox test (non-parametric test)
+# http://www.sthda.com/english/wiki/unpaired-two-samples-wilcoxon-test-in-r
+wilcoxTest <- wilcox.test(coastalChange$deltaCoast ~ coastalChange$noMudbank, 
+            alternative = "two.sided", mu = 0, conf.int=T, paired = F, exact = F,
+            correct = T)
+# P value < 0.05 thus the median is significantly different with a P ~ 0.00000 
+
+
 #'
-#'   or from a spatial perspective
+#'   from a spatial perspective
 #'
 
 # highest density

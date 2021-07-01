@@ -57,7 +57,8 @@ years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
-posToPlot <- 137000#138000#156000#230000
+posOfInterest <- c(50000, 210000, 310000)
+posToPlot <- 50000#138000#156000#230000
   
 reference_date <- as.Date("2020-01-01")
 aoi <- c('Suriname') 
@@ -92,9 +93,11 @@ for (q in seq_along(years)) {
 filtered <- unique(filtered)
 
 # bind_rows!!!
-allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
-                                                                                    sep = ',', na.strings=c("","NA")
-)))
+allFiles <- do.call(bind_rows, 
+                    lapply(as.matrix(filtered)[,1], 
+                           function(x) read.csv(x, stringsAsFactors = FALSE,
+                                                sep = ',', na.strings=c("","NA")
+            )))
 
 # where are the duplicates comming from when loading? 
 allFiles3 <- allFiles %>% 
@@ -117,7 +120,8 @@ coastlines <- st_as_sf(SpatialPointsDataFrame(data.frame(
 
 
 # select images
-imgSelect <- as.matrix(list.files(paste0('./data/raw/GEE_exports/GIF'), full.names = T))
+imgSelect <- as.matrix(list.files(paste0('./data/raw/GEE_exports/GIF/pos',posToPlot), 
+                                  full.names = T))
 # %>% 
 #   str_extract('(?<=city"":"").*(?="":COMMENT"")')
 
@@ -191,6 +195,8 @@ allFiles_mutate <- allFiles_POS %>%
 allFiles_mutate$normalized <- allFiles_mutate$coastDist - allFiles_mutate$baseline
 allFiles_mutate$normalized2 <- allFiles_mutate$coastDist - allFiles_mutate$baseline2
 
+
+
 nonOutliers <- subset(allFiles_mutate, coast_outlier == 1 &
                       coastX != -1)
 
@@ -215,7 +221,8 @@ ext <- extent(bbox_buf)
 
 # create ggplot with time series (only needed once!)
 
-
+maxVal <- max(allFiles_mutate$coastDist, na.rm = T)
+minVal <- min(allFiles_mutate$coastDist, na.rm = T)
 
 time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + # color=coast_outlier)
   # geom_line(aes(y=coast_median),size=2, linetype= "dotted") + # add median dtrendline?
@@ -229,7 +236,7 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
                      values = c('red', 'blue'),
                      labels = c("outlier", "coastal distance")) +
   # scale_linetype_manual(name = ' ', values = c('dashed'), labels = c('median')) +
-  scale_y_continuous(limits=c(0, 1200)) +
+  scale_y_continuous(limits=c(minVal, maxVal+100)) +
   
   scale_x_date(labels = date_format("%Y")) +
   ggtitle( paste0('position: ', posToPlot)) +
@@ -246,8 +253,8 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
         # legend.key = element_rect(fill = NA),
         # legend.text = element_text(size = 15),
         plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
-                                  vjust = -5), 
-        legend.position = c(.88, .2),
+                                  vjust = -2), 
+        legend.position = c(.88, .22),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
@@ -258,9 +265,11 @@ time_series
 # put this in a function to facilitate creating frames for creating GIF 
 allDates <- unique(allFiles_mutate$DATE_ACQUIRED) # consider non-outlier dates only?
 
+# do 1 frame per day to contorl frame speed 
+
 i <- 1
 for(da in allDates){         #1:nrow(df_img)){
-  # da <- allDates[3]
+  # da <- allDates[162]
   # da <- '2013-05-02'
   # da <- '2009-09-28'
   
@@ -273,7 +282,7 @@ for(da in allDates){         #1:nrow(df_img)){
 
   # file <- df_img[da,1]
   strings <- str_split(file, '/')[[1]]
-  fullName <- gsub(x=strings[6] ,pattern=".tif",replacement="",fixed=T)
+  fullName <- gsub(x=strings[7] ,pattern=".tif",replacement="",fixed=T)
   
   # extract details
   landsatID <- str_split(fullName, "_")[[1]][1]
@@ -363,180 +372,180 @@ for(da in allDates){         #1:nrow(df_img)){
 }
 
 
-
-# plot view
-nonOutliers_sp <- sp_pnt_ee(nonOutliers$coastX, nonOutliers$coastY,  
-                            'nonOutliers',"blue")
-coordinatesAOI <- nonOutliers_sp$x$setView[[1]]
-
-test2 <- firstAOI + nonOutliers_sp
-setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
-        subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
-
-# epochs: <20000, 2000 - 2010, 2010-2020
-allFiles_mutate$fiveyear <- as.Date(cut(lubridate::date(allFiles_mutate$DATE_ACQUIRED), 
-                                        "5 year"))
-
-
-# exclude river mouth obs
-allFiles_mutate <- subset(allFiles_mutate, !(pos %in% posToExclude))
-
-# For now exlude rediculous large slope values
-allFiles_mutate <- subset(allFiles_mutate, !(slope > 500 |
-                                               slope < -500))
-
-
-# Spatio temporal plot:
-# either slope or normalized distance seems to be best / clearest but needs to be checked with full dataset
-# Also deltaCoast requries additional test when median positions are all calculated
-# range <- round(quantile(allFiles_mutate$coast_median,c(0.05, 0.95), na.rm=T))
-range <- round(quantile(allFiles_mutate$slope,c(0.05, 0.95), na.rm=T))
-testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
-
-
-
-
-p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
-           aes(x = pos,y = as.Date(year_col), fill=slope))+  #y = as.Date(quarterly_col)
-  # fill=slope / deltaCoast / normalized / normalized2 / coastDist
-  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
-  scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
-                       breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
-                       low = "#a50026", high = "#313695", mid = '#f7f7f7',
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       oob=squish, na.value = NA) + #"grey50"
-  labs(y = 'Date', x = 'position') +
-  scale_x_reverse(lim=c(max(allFiles_mutate$pos)+4000, 0), expand = c(0,0)) + # 
-  # geom_segment(data = data.frame(x = pos, 
-  #                                xend= pos, 
-  #                                y=reference_date,
-  #                                yend=reference_date),
-  #              aes(x=x, y=y, xend=xend, yend=yend),
-  #              linetype="dashed") +
-  # geom_hline(yintercept = reference_date, linetype="dashed") +
-  # geom_segment(y=reference_date, yend = reference_date, linetype="dashed",
-  #              size = 1,
-  #              x=300000, xend=100000) + # doesn't work after applying reverse?
-  # geom_text(aes(max(pos)+1000,reference_date,label = 'reference date'),
-#           vjust = -2)+
-theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-      axis.line.y = element_line(size = 0.5, colour = "black"),
-      axis.line = element_line(size= 1, colour = "black"),
-      axis.title.y = element_text(size = 14, face = 'bold'),
-      axis.title.x = element_text(size = 14, face = 'bold'),
-      axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-      axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-      # strip.text.x = element_blank(), # remove panel labels
-      legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-      # legend.key = element_rect(fill = NA),
-      # legend.text = element_text(size = 15),
-      
-      # legend.position = 'none',
-      panel.grid.major = element_blank(), # remove grid lines
-      panel.grid.minor = element_blank(), 
-      panel.background = element_blank(),
-      plot.background = element_rect(fill = '#d9d9d9'))
-
-# 'echte' kustlijn gebruiken
-kustlijn <- readOGR('D:/BackUp_D_mangroMud_202001/Site1_Suriname_all/Analysis/IntertidalArea/Coastlines',
-                    'class10_line_v5')
-
-shapefile_df <- fortify(kustlijn)
-
-mapped <- ggplot() +
-  geom_path(data = shapefile_df, 
-            aes(x = long, y = lat, group = group)) +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 14, face = 'bold'),
-        axis.title.x = element_text(size = 14, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        # legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        plot.background = element_rect()) # fill = '#d9d9d9'
-
-map_projected <- mapped +
-  coord_map() +
-  scale_x_continuous(limits=c(-57.1, -53.95),
-                     expand = c(0,0))#, limits=c(0,30000),)
-
-# alignedPLots <- align_patches(p, map_projected)
-# p + map_projected + plot_layout(ncol = 1, nrow = 2, heights = c(1,0.1), alig)
-cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
-# https://stackoverflow.com/questions/54153906/aligning-axes-of-r-plots-on-one-side-of-a-grid-together
-
-
-
-library(cowplot)
-legend <- get_legend(p)
-
-p <- p + theme(legend.position = 'none')
-
-
-allFiles_mutate <- allFiles_mutate %>% 
-  group_by(year_col) %>%
-  dplyr::mutate(delta_median = median(deltaCoast, na.rm = T)) %>%
-  dplyr::mutate(negPos = ifelse(delta_median > 0, 1,0)) %>%
-  ungroup()
-
-allFiles_mutate$negPos <- 1
-myColors <- c()
-for( i in unique(allFiles_mutate$year_col)){
-  # i <- unique(allFiles$year_col)[29]
-  
-  annualSubset <- subset(allFiles_mutate,as.Date(year_col) == i &
-                           coast_outlier == 1)
-  idx <- which(allFiles_mutate$year_col == i & 
-                 allFiles_mutate$coast_outlier == 1)
-  
-  
-  meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
-  # medianVal <- median(annualSubset$deltaCoast, na.rm =T)
-  
-  myColors <- c(myColors, ifelse(meanVal>0 , '#2166ac', # blue if positive
-                                 ifelse(meanVal<0, '#b2182b', # red if negative
-                                        "grey90")))
-  
-  if(meanVal < 0){
-    print(paste0(i, ': ', meanVal))
-    allFiles_mutate$negPos[idx] <- 0
-  }
-  
-}
-
-test<- subset(allFiles_mutate, coast_outlier == 1 & as.Date(year_col) == i)
-# test$negPos
-
-
-# combine space-time plot and coastline change plot
-# p3 <- cowplot::plot_grid(p,p2, align = "h", ncol =2, rel_widths = c(1, 0.3))
-
-# p4 <- cowplot::plot_grid(p3, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
 # 
+# # plot view
+# nonOutliers_sp <- sp_pnt_ee(nonOutliers$coastX, nonOutliers$coastY,  
+#                             'nonOutliers',"blue")
+# coordinatesAOI <- nonOutliers_sp$x$setView[[1]]
+# 
+# test2 <- firstAOI + nonOutliers_sp
+# setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1], 
+#         subset(subset2d_for_testPlot, coast_outlier == 1)$coastY[1], 14, options = list())
+# 
+# # epochs: <20000, 2000 - 2010, 2010-2020
+# allFiles_mutate$fiveyear <- as.Date(cut(lubridate::date(allFiles_mutate$DATE_ACQUIRED), 
+#                                         "5 year"))
+# 
+# 
+# # exclude river mouth obs
+# allFiles_mutate <- subset(allFiles_mutate, !(pos %in% posToExclude))
+# 
+# # For now exlude rediculous large slope values
+# allFiles_mutate <- subset(allFiles_mutate, !(slope > 500 |
+#                                                slope < -500))
+# 
+# 
+# # Spatio temporal plot:
+# # either slope or normalized distance seems to be best / clearest but needs to be checked with full dataset
+# # Also deltaCoast requries additional test when median positions are all calculated
+# # range <- round(quantile(allFiles_mutate$coast_median,c(0.05, 0.95), na.rm=T))
+# range <- round(quantile(allFiles_mutate$slope,c(0.05, 0.95), na.rm=T))
+# testSubset<- allFiles_mutate[allFiles_mutate$pos == 2000,]
+# 
+# 
+# 
+# 
+# p <-ggplot(subset(allFiles_mutate, !is.na(slope)),
+#            aes(x = pos,y = as.Date(year_col), fill=slope))+  #y = as.Date(quarterly_col)
+#   # fill=slope / deltaCoast / normalized / normalized2 / coastDist
+#   geom_tile(color= "white",size=0.1, na.rm = TRUE) +
+#   scale_fill_gradient2(limits = c(range[[1]],range[[2]]), 
+#                        breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+#                        low = "#a50026", high = "#313695", mid = '#f7f7f7',
+#                        guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+#                                                draw.llim = FALSE),
+#                        oob=squish, na.value = NA) + #"grey50"
+#   labs(y = 'Date', x = 'position') +
+#   scale_x_reverse(lim=c(max(allFiles_mutate$pos)+4000, 0), expand = c(0,0)) + # 
+#   # geom_segment(data = data.frame(x = pos, 
+#   #                                xend= pos, 
+#   #                                y=reference_date,
+#   #                                yend=reference_date),
+#   #              aes(x=x, y=y, xend=xend, yend=yend),
+#   #              linetype="dashed") +
+#   # geom_hline(yintercept = reference_date, linetype="dashed") +
+#   # geom_segment(y=reference_date, yend = reference_date, linetype="dashed",
+#   #              size = 1,
+#   #              x=300000, xend=100000) + # doesn't work after applying reverse?
+#   # geom_text(aes(max(pos)+1000,reference_date,label = 'reference date'),
+# #           vjust = -2)+
+# theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#       axis.line.y = element_line(size = 0.5, colour = "black"),
+#       axis.line = element_line(size= 1, colour = "black"),
+#       axis.title.y = element_text(size = 14, face = 'bold'),
+#       axis.title.x = element_text(size = 14, face = 'bold'),
+#       axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+#       axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#       # strip.text.x = element_blank(), # remove panel labels
+#       legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#       # legend.key = element_rect(fill = NA),
+#       # legend.text = element_text(size = 15),
+#       
+#       # legend.position = 'none',
+#       panel.grid.major = element_blank(), # remove grid lines
+#       panel.grid.minor = element_blank(), 
+#       panel.background = element_blank(),
+#       plot.background = element_rect(fill = '#d9d9d9'))
+# 
+# # 'echte' kustlijn gebruiken
+# kustlijn <- readOGR('D:/BackUp_D_mangroMud_202001/Site1_Suriname_all/Analysis/IntertidalArea/Coastlines',
+#                     'class10_line_v5')
+# 
+# shapefile_df <- fortify(kustlijn)
+# 
+# mapped <- ggplot() +
+#   geom_path(data = shapefile_df, 
+#             aes(x = long, y = lat, group = group)) +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 14, face = 'bold'),
+#         axis.title.x = element_text(size = 14, face = 'bold'),
+#         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         # legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(), 
+#         panel.background = element_blank(),
+#         plot.background = element_rect()) # fill = '#d9d9d9'
+# 
+# map_projected <- mapped +
+#   coord_map() +
+#   scale_x_continuous(limits=c(-57.1, -53.95),
+#                      expand = c(0,0))#, limits=c(0,30000),)
+# 
+# # alignedPLots <- align_patches(p, map_projected)
+# # p + map_projected + plot_layout(ncol = 1, nrow = 2, heights = c(1,0.1), alig)
 # cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
-
-# patchwork
-# https://stackoverflow.com/questions/41569817/align-multiple-plots-in-ggplot2-when-some-have-legends-and-others-dont
-upper <- p + p2+map_projected +legend+ plot_layout(ncol = 2, nrow = 2, widths = c(1,0.3),
-                                                   heights = c(1,0.3))
-
-# final <- upper + map_projected + plot_layout(ncol = 2, nrow = 2, heights = c(1,0.3))
-# put the legend of space time plot below the coastline change plot??
-
-
-
-# http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
-blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
-  cowplot::theme_nothing()
-
-grid.arrange(p, p2,  blankPlot, legend,
-             ncol=2, nrow = 2, 
-             widths = c(2.7, 2.7), heights = c(0.2, 2.5))
+# # https://stackoverflow.com/questions/54153906/aligning-axes-of-r-plots-on-one-side-of-a-grid-together
+# 
+# 
+# 
+# library(cowplot)
+# legend <- get_legend(p)
+# 
+# p <- p + theme(legend.position = 'none')
+# 
+# 
+# allFiles_mutate <- allFiles_mutate %>% 
+#   group_by(year_col) %>%
+#   dplyr::mutate(delta_median = median(deltaCoast, na.rm = T)) %>%
+#   dplyr::mutate(negPos = ifelse(delta_median > 0, 1,0)) %>%
+#   ungroup()
+# 
+# allFiles_mutate$negPos <- 1
+# myColors <- c()
+# for( i in unique(allFiles_mutate$year_col)){
+#   # i <- unique(allFiles$year_col)[29]
+#   
+#   annualSubset <- subset(allFiles_mutate,as.Date(year_col) == i &
+#                            coast_outlier == 1)
+#   idx <- which(allFiles_mutate$year_col == i & 
+#                  allFiles_mutate$coast_outlier == 1)
+#   
+#   
+#   meanVal <- mean(annualSubset$deltaCoast, na.rm =T)
+#   # medianVal <- median(annualSubset$deltaCoast, na.rm =T)
+#   
+#   myColors <- c(myColors, ifelse(meanVal>0 , '#2166ac', # blue if positive
+#                                  ifelse(meanVal<0, '#b2182b', # red if negative
+#                                         "grey90")))
+#   
+#   if(meanVal < 0){
+#     print(paste0(i, ': ', meanVal))
+#     allFiles_mutate$negPos[idx] <- 0
+#   }
+#   
+# }
+# 
+# test<- subset(allFiles_mutate, coast_outlier == 1 & as.Date(year_col) == i)
+# # test$negPos
+# 
+# 
+# # combine space-time plot and coastline change plot
+# # p3 <- cowplot::plot_grid(p,p2, align = "h", ncol =2, rel_widths = c(1, 0.3))
+# 
+# # p4 <- cowplot::plot_grid(p3, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
+# # 
+# # cowplot::plot_grid(p, map_projected, align = "v", axis = "lr", ncol =1, rel_heights = c(1, 0.3))
+# 
+# # patchwork
+# # https://stackoverflow.com/questions/41569817/align-multiple-plots-in-ggplot2-when-some-have-legends-and-others-dont
+# upper <- p + p2+map_projected +legend+ plot_layout(ncol = 2, nrow = 2, widths = c(1,0.3),
+#                                                    heights = c(1,0.3))
+# 
+# # final <- upper + map_projected + plot_layout(ncol = 2, nrow = 2, heights = c(1,0.3))
+# # put the legend of space time plot below the coastline change plot??
+# 
+# 
+# 
+# # http://www.sthda.com/english/wiki/wiki.php?id_contents=7930
+# blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+#   cowplot::theme_nothing()
+# 
+# grid.arrange(p, p2,  blankPlot, legend,
+#              ncol=2, nrow = 2, 
+#              widths = c(2.7, 2.7), heights = c(0.2, 2.5))
 
 
 

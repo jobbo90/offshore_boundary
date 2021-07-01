@@ -30,6 +30,9 @@ __pycache__/
 **/.Rhistory
 **/.RData
 **/.Rproj.user
+.Rproj.user
+.Rhistory
+
 
 # exclude compiled binaries and external models
 /bin
@@ -43,8 +46,9 @@ __pycache__/
 *.sbn
 *.sbx
 *.xml
+*.qpj
 
-# other 
+# other
 *.csv
 *.png
 *.jpeg
@@ -52,18 +56,21 @@ __pycache__/
 *.tif
 
 # exclude data from source control by default
-/data/*
+/data/raw/GEE_exports/GIF/*
+#!/data/raw/GEE_exports/GIF/.gitkeep # ignoring of files in an ignored folder is not possible
 
-# exception to the rule
+!/data/processed/coastlines/.gitignore
+!/data/processed/coastlines/.gitkeep
+data/raw/GEE_exports/*
+!data/raw/GEE_exports/*Suriname_
+
+
+# exceptions to the rule
 !/data/**/.gitkeep
 #!/data/processed/coastlines/.gitkeep
 #!/data/raw/shapes/.gitkeep
-
 /results/temp_maps
 #/results/GIF/frames
 #/results/GIF/frames_156000
 #/results/GIF/frames_230000
 !/results/Validation
-
-
-.Rproj.user

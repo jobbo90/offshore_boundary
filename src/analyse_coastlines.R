@@ -61,7 +61,7 @@ posToExclude <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
 
 reference_date <- as.Date("1986-01-01")
-aoi <- c('Suriname') 
+aoi <- c('Suriname') # FrenchGuiana
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
@@ -99,7 +99,10 @@ allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.
                                                                                 )))
 
 # where are the duplicates comming from when loading? 
-allFiles3 <- allFiles %>% group_by_at(vars(DATE_ACQUIRED, pos)) %>% filter(n()>1) %>% ungroup()
+allFiles3 <- allFiles %>% 
+  group_by_at(vars(DATE_ACQUIRED, pos)) %>% 
+  filter(n()>1) %>% 
+  ungroup()
 
 col_dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
 col_coastDist <- col_of_interest(allFiles, 'coastDist$')
@@ -350,6 +353,79 @@ setView(test2, subset(subset2d_for_testPlot, coast_outlier == 1)$coastX[1],
 #' Alongshore variability in coastline position
 #' 
 #################################
+
+p <-ggplot(subset(allFiles_mutate, !is.na(deltaCoast) & !(pos %in% posToExclude)),
+           aes(x = pos,y = as.Date(year_col), fill=deltaCoast)) + 
+  
+  geom_tile(color= "white",size=0.1, na.rm = TRUE) +
+  
+  # resolve here that values larger than the range are indicated in the colourbar 
+  # now it reads as if the largest value is -125m/yr where as actually there is locations that
+  # have larger values.
+  # scale_fill_gradient2(name = 'change [m/yr] \n',limits = c(range[[1]],range[[2]]),
+  #                      # breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+  # 
+  #                      low = '#7b3294', high = "#008837", mid = '#f7f7f7',
+  #                      guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+  #                                              draw.llim = FALSE),
+  #                      na.value = NA, oob=squish) + # squish clamps all values to be within min & max of limits arguments
+
+
+scale_fill_gradientn(name = 'change [m/yr] \n',
+                     breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+                     limits = c(range[[1]],range[[2]]),
+                     colours = c('#7b3294', '#f7f7f7', "#008837"),
+                     guide = guide_colourbar(nbin=100, draw.ulim = FALSE, draw.llim = FALSE),
+                     oob=squish,
+                     values = scales::rescale(c(range[[1]], -50, 0, 50, range[[2]]))
+) +
+  geom_vline(xintercept = posOfInterest, color= 'red',
+             linetype="dashed") +
+  geom_text() +
+  annotate("text", label = as.roman(1:length(poiOriginX)),
+           x = posOfInterest + 6000,
+           y = rep(as.Date('1984-06-30'),length(poiOriginX)),
+           size = 6, colour = "red") +
+  
+  geom_rect(data = rectangles, inherit.aes = FALSE,
+            aes(xmin = xmin, xmax = xmax,
+                ymin = ymin,
+                ymax = ymax, colour = colour), fill = NA, size = 1) + 
+  
+  scale_colour_manual(name = ' ', values = c("black"),
+                      labels = c('mudbank'),
+                      guide = guide_legend(ncol = 2))+
+  
+  labs(y = 'Year', x = '') + #Alongshore Position [km]
+  scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0),
+                  labels = unit_format(unit = "", scale = 0.001)) + # 
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 12, face = 'bold'),
+        axis.title.x = element_text(size = 12, face = 'bold'),
+        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+        # legend.key = element_rect(fill = NA),
+        legend.text = element_text(size = 12),
+        # legend.position = 'none',
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+
+
+
+
+
+
+
+
+
+
+
 # similar to figure by Pieter Augustinus
 # filter outliers!
 
@@ -413,7 +489,6 @@ coastlineChange <- ggplot(subset(allFiles_mutate, coast_outlier ==1),
 
 testFigure <- ggplot(subset(allFiles_mutate, coast_outlier == 1), 
        aes(x= pos, y = normalized2)) + 
-  # scale_y_continuous(limits=c(-500, 500)) +
   geom_point(size = 2, alpha = 0.1, aes(color = five_year_col))  +
   # geom_boxplot(outlier.colour="black", outlier.shape=NA, width=0.6) +
   geom_smooth(method='lm', aes(group = five_year_col, color = five_year_col)) +
@@ -471,14 +546,73 @@ xAxis_seq <- quantile(allFiles_mutate$normalized,c(0.001, 0.999), na.rm = T)
 overallMean <- allFiles_mutate %>%
   dplyr::summarize(mean=mean(normalized, na.rm = T))
 
+library(ggridges)
+
+spatialVariability_ridges <- ggplot(data = subset(allFiles_mutate, coast_outlier ==1), 
+       aes(x=normalized, fill=alongshore, y=alongshore)) + 
+  geom_density_ridges(
+    stat = "binline", bins = 250, scale = 3,
+    draw_baseline = F, alpha = 0.7) + 
+  geom_segment(data = meansOI, 
+               aes(x = mean,xend=mean, 
+                   y=as.numeric(as.factor(alongshore))-0.3,
+                   yend = as.numeric(as.factor(alongshore))+3), 
+               size = 3, color = 'black') +
+  geom_segment(data = meansOI, 
+               aes(x = mean,xend=mean, 
+                   y=as.numeric(as.factor(alongshore))-0.3,
+                   yend = as.numeric(as.factor(alongshore))+3, 
+                   color=alongshore), size = 1.5) +
+  geom_vline(data = overallMean, aes(xintercept= mean, color = 'Black'), size = 1,
+             linetype="dashed") +
+  geom_text(data = meansOI, aes(label=sprintf("%1.1f", meansOI$mean), x = mean+500,
+                                y=as.numeric(as.factor(alongshore))+2.5),
+            colour = c('#1b9e77', '#d95f02', '#7570b3'), size = 5, fontface = 'bold') +
+  
+  scale_color_manual(values = c('Black'= 'black', 
+                                'East' = '#d95f02',
+                                'Center' = '#1b9e77',
+                                'West' = '#7570b3')) +
+  scale_fill_manual(values = c('East' = '#d95f02', # 
+                               'Center' = '#1b9e77',
+                               'West' = '#7570b3')) +
+  scale_x_continuous(breaks = sort(c(-2000, 0, 2000, 4000,
+                                     round(overallMean$mean))),
+                     guide = guide_axis(n.dodge=1)) +
+  
+  labs(y = '', x = 'Coastline position [m]') +
+  
+  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 20, face = 'bold'),
+        axis.title.x = element_text(size = 20, face = 'bold'),
+        axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
+        axis.text.y = element_text(size = 20, colour = "black", face = 'bold', 
+                                   hjust = .5, vjust = .5),
+        legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
+        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+        legend.position = "none",
+        legend.text = element_text(size = 20),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = '#d9d9d9'))
+
+spatialVariability_ridges
+
+# ggsave(spatialVariability_ridges, filename = paste0("./results/temp_maps/",
+#                                              'spatial_variability1985-2020',
+#                                    '_',  format(Sys.Date(), "%Y%m%d"),'_ridges.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
 spatialVariability <- ggplot(data = subset(allFiles_mutate, coast_outlier ==1), # & (deltaCoast > 30 | deltaCoast < -30)
-       aes(x=normalized, fill=alongshore)) + 
+       aes(x=normalized, fill=alongshore, alpha = alongshore)) + 
   # geom_freqpoly(binwidth = 25 ) + #, colour = alongshore
-  geom_histogram(position = 'identity', binwidth = 25, alpha = 0.6) +
-  # geom_density(aes(x=normalized2, y = ..scaled..), alpha = 0.5, adjust = 2) + #y = ..density..
-  # facet_wrap(paste0('~', 'five_year_col')) +
+  geom_histogram(position = 'identity', binwidth = 25) + #, alpha = 0.7
+  
+  facet_wrap(~alongshore, ncol = 1, nrow = 3) +
   geom_vline(data = meansOI, aes(xintercept= mean), size = 3.5, colour = 'black',
              linetype="solid") +
   geom_vline(data = meansOI, aes(xintercept= mean, color=alongshore), size = 2,
@@ -486,16 +620,27 @@ spatialVariability <- ggplot(data = subset(allFiles_mutate, coast_outlier ==1), 
   geom_vline(data = overallMean, aes(xintercept= mean, color = 'Black'), size = 2,
              linetype="dashed") +
   scale_color_manual(values = c('Black'= 'black', 
-                                'East' = '#33a02c',
-                                'Center' = '#1f78b4',
-                                'West' = '#fdbf6f')) +
-  scale_fill_manual(values = c('East' = '#33a02c',
-                               'Center' = '#1f78b4',
-                               'West' = '#fdbf6f')) +
+                                'East' =  "#33a02c",
+                                'Center' = "#2E9FDF",
+                                'West' = "#E7B800")) +
+  scale_fill_manual(values = c('East' = "#33a02c",#'#d95f02', # 
+                               'Center' = "#2E9FDF",#'#1b9e77',
+                               'West' = "#E7B800"))+ #'#7570b3'
+  # c("#E7B800", "#2E9FDF", "#33a02c")
   
-  scale_y_continuous(expand = c(0,0)) + 
-  scale_x_continuous(breaks = sort(c(-2000, 0, 2000, 4000, round(meansOI$mean), round(overallMean$mean))), 
-                     guide = guide_axis(n.dodge=2)) +
+  scale_alpha_manual(values= c('East' = 1,
+                       'Center' = 1,
+                       'West' = 1)) +
+  geom_text(data = meansOI, aes(label=sprintf("%1.1f", mean),
+                                x = c(1500,-200,-450),
+                                y=c(1350,1400,1150)),
+            colour = c('Black', 'Black', 'Black'), 
+            size = 8, fontface = 'bold', show.legend = FALSE) +
+
+  scale_y_continuous(expand = c(0,0), breaks = c(0, 750, 1500)) + 
+  scale_x_continuous(breaks = sort(c(-2000, 0, 2000, 
+                                     4000, round(overallMean$mean))),
+                     limits = c(-3000, 3000)) +
   guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
                               linetype = 0)),
          colour = F) +
@@ -510,20 +655,21 @@ spatialVariability <- ggplot(data = subset(allFiles_mutate, coast_outlier ==1), 
         axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
         legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.position = c(0.7,0.8),
+        legend.position = c(0.9,0.4),
         legend.text = element_text(size = 20),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
+        strip.text.x = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9'))
 
 spatialVariability
 
-ggsave(spatialVariability, filename = paste0("./results/temp_maps/",
-                                             'spatial_variability1985-2020',
-                                   '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-  
+# ggsave(spatialVariability, filename = paste0("./results/temp_maps/",
+#                                              'spatial_variability1985-2020',
+#                                    '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+#   
 # unique(allFiles_mutate$normalized)
 
 

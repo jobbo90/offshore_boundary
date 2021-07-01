@@ -44,14 +44,22 @@ seq2 <- seq(1985, 2020, 1)
 years <- c(seq2)
 
 # pos to exlcude for mudbank boundary estimates / outlier detection
-posToExclude <- c(seq(138000,147000,1000),
+posToExcludeSUR <- c(seq(138000,147000,1000),
                   seq(241000, 255000, 1000))  
+
+posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
+                    seq(315000,3340000,1000),# baia oiapoque 
+                    seq(223000,2250000,1000), # orapu
+                    seq(205000,2070000,1000), # cayenne
+) 
+
+posToExclude <- c(0)
 
 min_Std <- 25   # minimal amount of meters difference before considered outlier
 year_limit <- 4 # search window in years for finding coastline obs when insufficient values per year.
 min_obs_rosner <- 10    # Amount of obs needed to perform statistical test
 
-exportCoasts <- F
+exportCoasts <- T
 
 # mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 # leaflet() %>%
@@ -65,9 +73,11 @@ folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.na
 df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
-aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee
+aoi <-  c('Guyana') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
 
-path_rows <- c( '229_56', '228_56', '230_56') # '228_56','230_56'
+# path_rows <- c( '229_56', '228_56', '230_56') # '228_56','230_56'
+# path_rows <- c('226_57', '227_56', '227_57', '228_56_') #FrenchGuiana
+path_rows <- c('230_56', '231_55', '232_54') #Guyana
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
@@ -93,7 +103,7 @@ for (q in seq_along(years)) {
 filtered <- unique(filtered)
 allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
                                                                                 sep = ',', na.strings=c("","NA")
-                                                                                )))
+                                                                            )))
 # remove duplicate entries (31-12-yyyy occasionaly occurs double)
 allFiles <- unique(allFiles) 
 
@@ -470,11 +480,35 @@ if(exportCoasts){
     write_csv(coastlines_per_year, paste0(wd,"/data/processed/coastlines/", aoi,
                                         '_', year, '_coastlines.csv'))
     
+    # https://cran.r-project.org/web/packages/rgee/rgee.pdf
+    #http://5.9.10.113/65768592/converting-gee-script-to-be-used-with-rgee
+    
+    # select properties to include in the export
+    testForExport <- coastlines_per_year %>% 
+      dplyr::select(c(coastX, coastY, pos,DATE_ACQUIRED,coast_outlier,
+                      coastDist)) %>%
+      dplyr::mutate(coastDist = ifelse(is.na(coastDist), -1, coastDist))
+    
+    sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
+    
+
+    fileN <- paste0(aoi,'_',year,'_coastlines')
+    assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
+    
+    task_vect <- ee_table_to_asset(
+        collection = sf_to_ee,
+        description = fileN,
+        assetId = assetid,
+        overwrite = TRUE
+      )
+    task_vect$start()
+    # ee_monitoring(task_vect) 
+    
     # build function to export directly to GEE asset
     
     print( paste0(wd,"/data/processed/coastlines/", aoi,
                   '_', year, '_coastlines.csv'))
-    remove(coastlines_per_year, start_year, end_year)
+    remove(coastlines_per_year,sf_to_ee, start_year, end_year,task_vect)
   }
   
   
@@ -486,44 +520,42 @@ if(exportCoasts){
 #'
 #' test simple 2d plot
 #' 
-
-# twoD_pos <- 38000 
 # 
+# twoD_pos <- 38000
+
 # subset2d_for_testPlot <- subset(coastlines3, pos == twoD_pos)
 # 
 # plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
 #      xlab="DATE_ACQUIRED", ylab="coastDist [m]",
 #      main = paste0('coastline position: ',twoD_pos, ' [m]'), pch = 20)
-# lines(unique(as.Date(subset2d_for_testPlot$year_col))+180, 
-#       aggregate(subset2d_for_testPlot$coast_median, list(subset2d_for_testPlot$key), median)$x, 
+# lines(unique(as.Date(subset2d_for_testPlot$year_col))+180,
+#       aggregate(subset2d_for_testPlot$coast_median, list(subset2d_for_testPlot$key), median)$x,
 #       col = 'black', lty = 2)
 # points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
 #        subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
 #        col = 'red',  pch = 20)
-# points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$DATE_ACQUIRED), 
+# points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$DATE_ACQUIRED),
 #        subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$locf, col = 'blue')
 # legend("right", legend=c("Observations", "median values", 'outliers', 'locf'),
 #        col=c("black", "black", 'red', 'blue'), pch = c(20,NA,20,20) ,lty = c(0,2,0,0), cex=0.8)
-
-# coast_spatial <- sp_pnt_ee(subset2d_for_testPlot$coastX,
-#                               subset2d_for_testPlot$coastY, paste0('pos: ',twoD_pos),
-#                               "#d95f0e")
 # 
-# pnt <- ee$Geometry$Point(c(median(subset2d_for_testPlot$originX), median(subset2d_for_testPlot$originY)))
+coast_spatial <- sp_pnt_ee(subset2d_for_testPlot$coastX,
+                              subset2d_for_testPlot$coastY, paste0('pos: ',twoD_pos),
+                              "#d95f0e")
 
-# filtCollect <- collection$filterBounds(pnt)$
-#   filterDate(as.character(as.Date(min(subset2d_for_testPlot$DATE_ACQUIRED))-1), 
-#              as.character(as.Date(max(subset2d_for_testPlot$DATE_ACQUIRED))+1))$
-#   sort("CLOUDCOVER", TRUE)
-# dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
+pnt <- ee$Geometry$Point(c(median(subset2d_for_testPlot$originX), median(subset2d_for_testPlot$originY)))
 
-# acquisition <- ee_get_date_img(filtCollect$first())$time_start
+filtCollect <- collection$filterBounds(pnt)$
+  filterDate(as.character(as.Date(min(subset2d_for_testPlot$DATE_ACQUIRED))-1),
+             as.character(as.Date(max(subset2d_for_testPlot$DATE_ACQUIRED))+1))$
+  sort("CLOUDCOVER", TRUE)
+dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
-# Map$centerObject(filtCollect$first())
-# first <- Map$addLayer(filtCollect$first(), vizParams, paste0('landsat: ', format(as.Date(acquisition), '%Y-%m-%d')))
+acquisition <- ee_get_date_img(filtCollect$first())$time_start
 
-# first + coast_spatial
+Map$centerObject(filtCollect$first())
+first <- Map$addLayer(filtCollect$first(), vizParams, paste0('landsat: ', format(as.Date(acquisition), '%Y-%m-%d')))
+
+first + coast_spatial
 
 
-
-remove(coastlines3, coastlines2, coastlines, folderSelect, df)

@@ -51,10 +51,19 @@ mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "Open
 dataFolder <- './data/processed'
 # years <- c('2005', '2006','2007', '2008','2009')
 years <- seq(from = 1985, to = 2020, by = 1)
-aoi <- c('Suriname')
+aoi <- c('Suriname') # FrenchGuiana / Guayana / Suriname
 
-posToExclude <- c(seq(138000,147000,1000),
-                  seq(241000, 255000, 1000))  
+# pos to exlcude for mudbank boundary estimates / outlier detection
+posToExcludeSUR <- c(seq(138000,147000,1000),
+                     seq(241000, 255000, 1000))  
+
+posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
+                    seq(315000,334000,1000),# baia oiapoque 
+                    seq(223000,225000,1000), # orapu
+                    seq(205000,207000,1000) # cayenne
+) 
+
+posToExclude <- posToExcludeSUR
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/offshore_points'), full.names = T))
@@ -154,18 +163,6 @@ group_pos <- unique(allFiles$pos)
 summarisePos <- 10000
 
 
-# MOVE TO PRE-PROCESS
-# allFiles <- allFiles %>% # annual_obs %>%
-#   group_by(year_col, pos) %>%
-#   dplyr::mutate(
-#     noMudbank = case_when(
-#       validMudbankObs/mudbankObs > 0.66 ~ 0,
-#       TRUE ~ 1)) %>%
-# 
-#   ungroup() #%>%
-#   # dplyr::select(year_col, pos, mudbank_outlier, axisDist, noMudbank)
-
-
 breaks <- seq(0, max(allFiles$pos), summarisePos)
 
 # position label for plotting x-axis
@@ -196,7 +193,7 @@ rectangles <- data.frame(id = character(),fill =  character(),
 # but still calculate the median offshore only on the relevant observations
 
 for(y in 1:length(all_years)){
-  # y <- 4
+  # y <- 1
   # selected_year <- '1991-01-01'
   selected_year <- all_years[y]
   annualSubset <- subset(allFiles,as.Date(year_col) == selected_year &
@@ -218,11 +215,20 @@ for(y in 1:length(all_years)){
   startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
   endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
   
-  rectangles <- rbind(rectangles, data.frame(id = selected_year,fill = 'black',
-                                             colour = 'black',
-                                             xmin = startPos, xmax = endPos, 
-                                             ymin = as.Date(selected_year)-184, # the geom_tiles per year have first of januari each year as midpoint  
-                                             ymax = as.Date(selected_year)+181)) # so to have years overlapping this needs to be corrected
+  if(length(startPos) == 0){
+    startPos <- c(0)
+    endPos <- c(0)
+  }
+  
+  
+  
+  rectangles <- rbind(rectangles, 
+                      data.frame(id = selected_year,fill = 'black',
+                                 colour = 'black',
+                                 xmin = startPos, 
+                                 xmax = endPos, 
+                                 ymin = as.Date(selected_year)-184, # the geom_tiles per year have first of januari each year as midpoint  
+                                 ymax = as.Date(selected_year)+181)) # so to have years overlapping this needs to be corrected
   
   # get mean coastal change for given year
   # hist(unlist(annualSubset[which(annualSubset$deltaCoast != 0), 'deltaCoast']))
@@ -372,7 +378,7 @@ aggregatedPos <- aggregatedPos + theme(legend.position = 'none')
 #' hovmoller plots
 #'
 #####
-posOfInterest <- c(50000, 210000, 350000)
+posOfInterest <- c(50000, 210000, 310000)
 dataPOI <- subset(allFiles, (pos %in% posOfInterest))
 
 poiOriginX <- c(as.matrix(tapply(dataPOI$originX, dataPOI$pos, median)))
@@ -399,7 +405,7 @@ p <-ggplot(subset(allFiles, !is.na(deltaCoast) & !(pos %in% posToExclude)),
   #                      na.value = NA, oob=squish) + # squish clamps all values to be within min & max of limits arguments
 
 
-scale_fill_gradientn(name = 'change [m/yr] \n',
+  scale_fill_gradientn(name = 'coastline change \n [m/yr] \n',
                      breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
                      limits = c(range[[1]],range[[2]]),
                      colours = c('#7b3294', '#f7f7f7', "#008837"),
@@ -407,13 +413,13 @@ scale_fill_gradientn(name = 'change [m/yr] \n',
                      oob=squish,
                      values = scales::rescale(c(range[[1]], -50, 0, 50, range[[2]]))
                      ) +
-  geom_vline(xintercept = posOfInterest, color= 'red',
-             linetype="dashed") +
-  geom_text() +
-  annotate("text", label = as.roman(1:length(poiOriginX)),
-           x = posOfInterest + 6000,
-           y = rep(as.Date('1984-06-30'),length(poiOriginX)),
-           size = 6, colour = "red") +
+  # geom_vline(xintercept = posOfInterest, color= 'red',
+  #            linetype="dashed") +
+  # geom_text() +
+  # annotate("text", label = as.roman(1:length(poiOriginX)),
+  #          x = posOfInterest + 6000,
+  #          y = rep(as.Date('1984-06-30'),length(poiOriginX)),
+  #          size = 6, colour = "red") +
   
   geom_rect(data = rectangles, inherit.aes = FALSE,
             aes(xmin = xmin, xmax = xmax,
@@ -424,7 +430,7 @@ scale_fill_gradientn(name = 'change [m/yr] \n',
                       labels = c('mudbank'),
                       guide = guide_legend(ncol = 2))+
 
-  labs(y = 'Year', x = '') + #Alongshore Position [km]
+  labs(y = 'Year', x = 'Alongshore Position [km]') + #Alongshore Position [km]
   scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0),
                   labels = unit_format(unit = "", scale = 0.001)) + # 
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -443,7 +449,7 @@ scale_fill_gradientn(name = 'change [m/yr] \n',
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-# p
+p
 
 legend <- get_legend(p)
 
@@ -451,7 +457,7 @@ p <- p + theme(legend.position = 'none')
 
 
 kustlijn <- readOGR(dsn = paste0(wd,'/data/raw/shapes'),
-                    layer = 'class10_line')
+                    layer = 'coastline_suriname_disc')
 
 shapefile_df <- fortify(kustlijn)
 shapefile_df$class <- NA
@@ -537,18 +543,6 @@ final
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 # 
 
-graphicalAbstractLeft <- plot_grid(p,mapped, ncol = 1, align = 'v',
-                               nrow = 2, rel_heights = c(2.5, 0.5))
-graphicalAbstract <- plot_grid(graphicalAbstractLeft, legend, ncol = 2,
-                              rel_widths = c(2.5, 0.5)) + 
-  theme(panel.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'))
-
-# graphicalAbstract
-# 
-# ggsave(plot = graphicalAbstract, 
-#        filename = paste0("./results/temp_maps/", 'graphicalAbstract_',
-#                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 #make sure only bottom (final) plot gets a legend
 plotcounter <- 1
@@ -643,7 +637,6 @@ for (position in posOfInterest){
 
 
 # plot alongshore variability of mud fractions
-# allFiles$meanMud # SmoothedPeakFract
 range <- round(quantile(subset(allFiles, 
                                !is.na(meanMud) & 
                                  #allFiles$mudbank_outlier <1 &
@@ -707,9 +700,8 @@ hovmoller <-
 
 hovmoller
 
-ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_yearly_1985_2020_',
-        format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-
+# ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_yearly_1985_2020_',
+#         format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
