@@ -38,7 +38,7 @@ memory.limit(30000000)     # this is needed on some PCs to increase memory allow
 
 #' load up the packages 
 source("./src/packages.R")       # loads up all the packages we need
-# Sys.setenv("RETICULATE_PYTHON" = "C:/Users/5600944/AppData/Local/r-miniconda/envs/rgee/python.exe")
+
 ee_Initialize()
 ## ---------------------------
 source("./src/functions.R")
@@ -94,9 +94,11 @@ for (q in seq_along(years)) {
 filtered <- unique(filtered)
 
 # bind_rows!!!
-allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
-                                                                                    sep = ',', na.strings=c("","NA")
-)))
+allFiles <- do.call(bind_rows, 
+                    lapply(as.matrix(filtered)[,1], 
+                           function(x) read.csv(x, stringsAsFactors = FALSE,
+                                          sep = ',', na.strings=c("","NA"))
+                           ))
 
 # where are the duplicates comming from when loading? 
 allFiles3 <- allFiles %>% group_by_at(vars(DATE_ACQUIRED, pos)) %>% 
