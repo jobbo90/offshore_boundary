@@ -52,6 +52,7 @@ __pycache__/
 
 # exception to the rule
 /data/**/.gitkeep
+/data/raw/shapes/.gitkeep
 
 /results/temp_maps
 /results/GIF/frames
