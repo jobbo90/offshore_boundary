@@ -52,11 +52,10 @@ __pycache__/
 *.tif
 
 # exclude data from source control by default
-#/data/**/.tif
 /data/*
 
 # exception to the rule
-/data/**/.gitkeep
+!/data/**/.gitkeep
 #!/data/processed/coastlines/.gitkeep
 #!/data/raw/shapes/.gitkeep
 
