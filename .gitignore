@@ -39,6 +39,7 @@ __pycache__/
 *.prj
 *.shp
 *.shx
+*.cpg
 
 # other 
 *.csv
@@ -50,10 +51,9 @@ __pycache__/
 /data/temp
 /data/raw
 # exclude everything
-/data/processed/coastlines/*
+/data/*
 
 # exception to the rule
-/data/processed/coastlines/.gitkeep 
 /data/**/.gitkeep
 
 /results/temp_maps
