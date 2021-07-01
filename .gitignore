@@ -40,25 +40,32 @@ __pycache__/
 *.shp
 *.shx
 *.cpg
+*.sbn
+*.sbx
+*.xml
 
 # other 
 *.csv
 *.png
 *.jpeg
 *.mp4
+*.tif
 
 # exclude data from source control by default
+#/data/**/.tif
 /data/*
+#/data/raw/GEE_exports/GIF/pos210000/*
 
 # exception to the rule
-!/data/**/.gitkeep
-!/data/raw/shapes/.gitkeep
+/data/**/.gitkeep
+#!/data/processed/coastlines/.gitkeep
+#!/data/raw/shapes/.gitkeep
 
 /results/temp_maps
-/results/GIF/frames
-/results/GIF/frames_156000
-/results/GIF/frames_230000
-/results/Validation
-#/data/processed/validation/WegNaarZee
-#/data/processed/validation/Braamspunt
+#/results/GIF/frames
+#/results/GIF/frames_156000
+#/results/GIF/frames_230000
+#/results/Validation
 
+
+.Rproj.user
