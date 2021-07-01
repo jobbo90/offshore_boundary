@@ -54,12 +54,13 @@ __pycache__/
 
 # exception to the rule
 /data/processed/coastlines/.gitkeep 
+/data/**/.gitkeep
 
 /results/temp_maps
 /results/GIF/frames
 /results/GIF/frames_156000
 /results/GIF/frames_230000
 /results/Validation
-/data/processed/validation/WegNaarZee
-/data/processed/validation/Braamspunt
+#/data/processed/validation/WegNaarZee
+#/data/processed/validation/Braamspunt
 
