@@ -32,7 +32,7 @@ col_of_interest <- function(csv, patt){
   #' @return integer
   #' 
   #' fix the pattern, with end of line issue.
-  return(grep(paste( '^', patt, '$', sep = ''), colnames(csv), fixed = F))
+  return(grep(paste( '^', patt, sep = ''), colnames(csv), fixed = F))
 }
 
 reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){

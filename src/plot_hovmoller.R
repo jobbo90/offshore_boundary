@@ -413,13 +413,13 @@ p <-ggplot(subset(allFiles, !is.na(deltaCoast) & !(pos %in% posToExclude)),
                      oob=squish,
                      values = scales::rescale(c(range[[1]], -50, 0, 50, range[[2]]))
                      ) +
-  # geom_vline(xintercept = posOfInterest, color= 'red',
-  #            linetype="dashed") +
+  geom_vline(xintercept = posOfInterest, color= 'red',
+             linetype="dashed") +
   # geom_text() +
-  # annotate("text", label = as.roman(1:length(poiOriginX)),
-  #          x = posOfInterest + 6000,
-  #          y = rep(as.Date('1984-06-30'),length(poiOriginX)),
-  #          size = 6, colour = "red") +
+  annotate("text", label = as.roman(1:length(poiOriginX)),
+           x = posOfInterest + 6000,
+           y = rep(as.Date('1984-06-30'),length(poiOriginX)),
+           size = 6, colour = "red") +
   
   geom_rect(data = rectangles, inherit.aes = FALSE,
             aes(xmin = xmin, xmax = xmax,
@@ -441,6 +441,7 @@ p <-ggplot(subset(allFiles, !is.na(deltaCoast) & !(pos %in% posToExclude)),
         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+        legend.spacing.y = unit(0.1, 'cm'),
         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
         # legend.key = element_rect(fill = NA),
         legend.text = element_text(size = 12),
@@ -449,7 +450,7 @@ p <-ggplot(subset(allFiles, !is.na(deltaCoast) & !(pos %in% posToExclude)),
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-p
+# p
 
 legend <- get_legend(p)
 
@@ -522,7 +523,8 @@ left2 <- plot_grid(p, aggregatedPos, mapped, ncol = 1, align = 'v',
                    labels = c('A', 'C', 'D'), vjust =c(+4, -1,-1), # adjust label position
                    hjust = -2)
 
-legends <- plot_grid(legend, NULL, legendAnnual, nrow = 1, ncol = 3, rel_widths = c(1,-2,3),
+legends <- plot_grid(legend, NULL, legendAnnual, nrow = 1, ncol = 3, 
+                     rel_widths = c(1,-2,3),
                      axis = 't', align = 'v') + 
   theme(panel.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9')) #plot.margin = unit(c(0,0,0,0), 'cm')
 # legends
@@ -536,16 +538,17 @@ final <- plot_grid(left2, right, align = 'h', ncol = 2,
           rel_widths = c(2.5, 1)) + 
   theme(panel.background = element_rect(fill = '#d9d9d9', colour = '#d9d9d9'))
 
-final
-# 
+# final
+
 # ggsave(plot = final, filename = paste0("./results/temp_maps/", 'Suriname_hovmollerFigure_1985_2020_',
 #                          format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-# 
+
 
 
 #make sure only bottom (final) plot gets a legend
 plotcounter <- 1
+library(grid)
 
 for (position in posOfInterest){
   # position <- posOfInterest[3]
@@ -563,12 +566,12 @@ for (position in posOfInterest){
   # startPos <- vapply(filtSequences, head, n = 1L, FUN.VALUE = numeric(1))
   # endPos <- vapply(filtSequences, tail, n = 1L, FUN.VALUE = numeric(1))
 
-  dateFrames <- data.frame(id = rep(position, length(getYears$year_col)), 
+  dateFrames <- data.frame(id = rep(position, length(getYears)), 
                            fill = '#7fbf7b',colour = 'black',
-                           xmin = as.Date(getYears$year_col),
-                           xmax = as.Date(getYears$year_col) + 365,
+                           xmin = as.Date(getYears),
+                           xmax = as.Date(getYears) + 365,
                            ymin = coastDistRange[1],
-                           ymax = coastDistRange[2])
+                           ymax = coastDistRange[2]+50)
   
   
   legendPos <- as.character(ifelse(plotcounter == length(posOfInterest),
@@ -586,12 +589,16 @@ for (position in posOfInterest){
     # geom_smooth(inherit.aes = FALSE, aes(x = as.Date(DATE_ACQUIRED), y = coast_median),
     #           alpha = 0.9, size = 1.2, se = F) +
     geom_point(size = 3, aes(colour = as.factor(coast_outlier)), alpha = 0.6) +
-    scale_y_continuous(limits=c(coastDistRange[1],coastDistRange[2])) +
+    scale_y_continuous(limits=c(coastDistRange[1],coastDistRange[2]+50)) +
     scale_color_manual(name = "Observations",
                        values = c('red', 'blue'),
                        labels = c("outlier", "coastal distance")) +
 
 
+    annotate("text", label = paste0(LETTERS[plotcounter]),
+             x = min(as.Date(getYears)),
+             y = coastDistRange[2]+50,
+             size = 14,colour = "black", hjust = +2.2, vjust = -0.2) +
     
     scale_x_date(labels = date_format("%Y")) +
     # guides(colour=guide_legend(ncol=2)) +
@@ -621,15 +628,17 @@ for (position in posOfInterest){
           
           panel.border = element_blank())
 
-  # twoDPlot
+  gt <- ggplot_gtable(ggplot_build(twoDPlot))
+  gt$layout$clip[gt$layout$name == "panel"] <- "off"
+  grid.draw(gt)
   
-  # ggsave(plot = twoDPlot, filename = paste0("./results/temp_maps/", 
-  #                                           'Suriname_pos_', position, 
-  #                                           '_1985_2020_',
-  #                                           format(Sys.Date(), "%Y%m%d"),
-  #                                           '.jpeg'),
-  #         width = 8.5, height = 3.7, units = c('in'), dpi = 1200)
-  #width = 13.1, height = 7.25
+  ggsave(plot = gt, filename = paste0("./results/temp_maps/",
+                                            'Suriname_pos_', position,
+                                            '_1985_2020_',
+                                            format(Sys.Date(), "%Y%m%d"),
+                                            '.jpeg'),
+          width = 8.5, height = 3.7, units = c('in'), dpi = 1200)
+  # width = 13.1, height = 7.25
   plotcounter <- plotcounter + 1
 }
 # 
@@ -679,7 +688,7 @@ hovmoller <-
                       labels = c('mudbank'),
                       guide = guide_legend(ncol = 2))+
   
-  labs(y = 'Date', x = 'Position [km]') +
+  labs(y = 'Year', x = 'Alongshore Position [km]') +
   
   scale_x_reverse(lim=c(max(allFiles$pos)+4000, 0), expand = c(0,0),
                   labels = unit_format(unit = "", scale = 0.001)) +
@@ -700,8 +709,8 @@ hovmoller <-
 
 hovmoller
 
-# ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_yearly_1985_2020_',
-#         format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+ggsave(plot = hovmoller, filename = paste0("./results/temp_maps/", 'Suriname_fraction_yearly_1985_2020_',
+        format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 

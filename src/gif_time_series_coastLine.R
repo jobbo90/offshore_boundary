@@ -6,6 +6,7 @@
 #' 
 #'
 #' Author: Job de Vries
+#' after Phillip Kraaijenbrink: https://github.com/kraaijenbrink/ERA5-Land-globe-animation
 #'
 #' Date Created: 2021-03-21
 #'

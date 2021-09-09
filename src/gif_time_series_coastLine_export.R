@@ -6,7 +6,12 @@
 #' 
 #'
 #' Author: Job de Vries
-#'
+#' 
+#' after: 
+#' Philip Kraaijenbrink. (2021, July 9). 
+#' ERA5-Land globe animation (Version 1.0.0). 
+#' Zenodo. http://doi.org/10.5281/zenodo.5084524
+#' 
 #' Date Created: 2021-03-21
 #'
 #' Copyright (c) Job de Vries, 2021
