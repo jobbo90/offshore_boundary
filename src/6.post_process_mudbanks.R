@@ -40,7 +40,7 @@ source("./src/functions.R")
 ## ---------------------------
 
 years <- c(seq(1985, 2020, 1))
-aoi <-  c('Guyana') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
+aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
 
 # pos to exlcude for mudbank boundary estimates / outlier detection
 posToExcludeSUR <- c(seq(138000,147000,1000),
@@ -48,14 +48,24 @@ posToExcludeSUR <- c(seq(138000,147000,1000),
 
 
 posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
-                    seq(315000,3340000,1000),# baia oiapoque 
-                    seq(223000,2250000,1000), # orapu
-                    seq(205000,2070000,1000) # cayenne
+                    seq(315000,334000,1000),# baia oiapoque 
+                    seq(223000,225000,1000), # orapu
+                    seq(205000,207000,1000) # cayenne
                     ) 
-posToExclude <- c(0)
+posToExcludeGUY <- c(seq(527000,532000,1000), # Courantyne River
+                    seq(461000, 462000,1000),# berbice River
+                    seq(364000,365000,1000), # demerara River
+                    seq(294000,343000,1000), # Essequibo River delta
+                    seq(72000,74000,1000) # waini River
+) 
+
+allPos <- list('Suriname' = posToExcludeSUR, 
+               "FrenchGuiana" = posToExcludeFG,
+               "Guyana" = posToExcludeGUY )
+posToExclude <- allPos[[aoi]]
 
 # outlier detection parameters for mudbanks
-initialSearchWindow <- 25            # amount of
+initialSearchWindow <- 25
 lowerLevelWindow <- 3
 
 # select previously calculated coastline positions
@@ -88,7 +98,7 @@ for (q in seq_along(years)) {
 }
 filtered <- unique(filtered)
 # bind_rows!!!
-mudbanks <- do.call(bind_rows,
+mudbanks <- do.call(plyr::rbind.fill,
                          lapply(as.matrix(filtered)[,1],
                                 function(x) read.csv(x,
                                 stringsAsFactors = FALSE, sep = ',',
@@ -97,7 +107,6 @@ mudbanks <- do.call(bind_rows,
 
 # all dates
 uniqueDates <- unique(mudbanks$DATE_ACQUIRED)
-
 all_years <- unique(mudbanks$year_col)
 group_pos <- unique(mudbanks$pos)
 
@@ -142,13 +151,12 @@ mudbanks2 <- mudbanks %>%
 
 mudbanks2$x <- -1
 mudbanks2$y <- -1
+
 # reshape mudbanks such that each relative, absolute and slope drop gets it own data-entry for each pos
 # so triplicate each row and overwrite the values in the corresponding columns
 # transform such that for each pos all three coordinates become a separate entry with unique x,y coords
-
-
-subsetPos <- subset(mudbanks2, (pos == 153000 & DATE_ACQUIRED == "2013-10-27"))
 # get duplicates: same date & pos 
+
 duplicate <- mudbanks2 %>% 
   group_by_at(vars(DATE_ACQUIRED, pos)) %>% 
   filter(n()>1) %>% 
@@ -178,11 +186,17 @@ mudbanks3 <- mudbanks2 %>%
                    axisDistAbsY, axisDistAbsX,
                    mudbank_extent_slope, mudbank_extent_abs,
                    peakCoordX, peakCoordY)) %>%
-  dplyr::ungroup()
+  dplyr::ungroup()%>% 
+  dplyr::mutate(rowNR = row_number())
 
 
 # for each imagedate; test for obvious mudbank boundary outliers
+# - mudbank extent cannot be smaller than coastline position
+# - mudbank extent cannot be -1
+# - mudbank extent subjected to outlier test
+
 for (i in uniqueDates){
+  # i <- uniqueDates[500]
 
   # select all observations of the corresponding date
   mudbanks_selection <-subset(mudbanks3, mudbanks3$DATE_ACQUIRED == i & 
@@ -192,7 +206,6 @@ for (i in uniqueDates){
   # order by position
   mudbanks_selection<-mudbanks_selection[order(mudbanks_selection$pos),]
 
-  #'
   #'  obvious outliers:
   #' - mudbank extent cannot be smaller than coastline position
   #' - mudbank extent cannot be -1
@@ -217,12 +230,15 @@ for (i in uniqueDates){
   
   
   if(length(unique(positions_all)) > 2){
+    
     # second order polynomial fit: alongshore position & polynomial fit
     lm_out_all <-lm(distances_all ~ poly(as.numeric(positions_all),2))
     
-    predicted.intervals <- predict(lm_out_all,
-                                   data.frame(x=as.numeric(positions_all)),
-                                   interval='confidence', level=0.99)
+    
+    # plot(positions_all, distances_all)
+    # predicted.intervals <- predict(lm_out_all,
+    #                                data.frame(x=as.numeric(positions_all)),
+    #                                interval='confidence', level=0.99)
     
     # Bonferroni-adjusted mudbank_outlier test (test largest absolute standardized residual)
     outlier_test <- car::outlierTest(lm_out_all) 
@@ -230,17 +246,11 @@ for (i in uniqueDates){
     # combine all outliers
     outlier_ind<- c(as.numeric(names(outlier_test$rstudent)))
     
-
     # keep track of entries that need to be tracked as outlier
     combinations <- rbind(combinations, data.frame(DATE_ACQUIRED = rep(i, length(outlier_ind)),
                                                    pos = mudbanks_selection$pos[outlier_ind],
                                                    dropClass = mudbanks_selection$dropClass[outlier_ind]))
-    # first + non_outliers + coastline_selection + nonsense_sp + outliers_sp
-    
-    #' 
-    #' plotting!
-    #' 
-    
+
     # drop these most obvious outliers from the selection
     # ==> from here on not every observations has 3 data entries anymore!!!!!
     mudbanks_selection <- mudbanks_selection[-outlier_ind, ]
@@ -251,9 +261,9 @@ for (i in uniqueDates){
   #' peak height and distance and same for extent height and distance
   #' these values are smoothed and therefore relatively stable
   #' 
-  #' So assuming the fraction values corresponding to maxExtent and SuperSmoothed peak are
-  #' representative increase between them or relative flat decrease in fraction
-  #' represents no mudbank scenario
+  #' The fraction values corresponding to maxExtent and SuperSmoothed peak are
+  #' therefore assumed to be representative for offshore decrease of sediment
+  #' So if the slopes are significant positive they are assumed to be outliers
   #' 
   #' risks:
   #' part of the transect over land, the shorter the less likely the SuperSmoothed peak is correct
@@ -276,7 +286,8 @@ for (i in uniqueDates){
   #' to account for spatial variability. 
 
   # update search window if needed
-  searchWindow <- ifelse(length(mudbanks_selection$SmoothedPeakFract) < initialSearchWindow, 2, initialSearchWindow)
+  searchWindow <- ifelse(length(mudbanks_selection$SmoothedPeakFract) < initialSearchWindow, 
+                         2, initialSearchWindow)
   lowerLevelWindow <- ifelse(searchWindow > lowerLevelWindow, lowerLevelWindow, 1)
   
   # calculate running average
@@ -285,6 +296,8 @@ for (i in uniqueDates){
                                                searchWindow,fill = NA))
   # replace very small values
   runnAve$rolling[which(runnAve$rolling < 0.001)] <- NA
+  
+  
   
   # get transects with local minimum values
   localMin <- rollapply(as.zoo(runnAve$rolling), 3, function(x) which.min(x)==2)
@@ -302,8 +315,6 @@ for (i in uniqueDates){
   
   # local mins are potential transects with NO mudbank
   if(length(unique(localMinsPos)) > 1){
-  
-    
     for(p in 1:length(localMinsPos)){
       # p <- 1
       minPos <- localMinsPos[p]
@@ -351,9 +362,6 @@ for (i in uniqueDates){
         posDist2_new <- posDist2[posDist2 - minPos < -1]
         minMax<-minMax[!(minMax %in% c(shoulder1, minPos))]
       }
-      
-      
-      
       
       shoulder2 <- ifelse(length(posDist_new)>0,
                           posDist_new[which.min(abs(unique(valley$pos) - posDist_new))],
@@ -431,56 +439,49 @@ for (i in uniqueDates){
   # points(mudbanks_selection$pos, mudbanks_selection$meanMud, col = 'blue')
   # abline(v = localMinsPos, lty = 3)
   # points(runnAve$pos,runnAve$rolling, col = 'orange')
-
-  # points that potentially correspond to interbank phases
-  # localMin <- mudbanks_selection[which(mudbanks_selection$pos %in% localMinsPos),]
-  # localMin_sp <- sp_pnt_ee(localMin$x,
-  #                          localMin$y,
-  #                          'localMin',
-  #                          "red")
   
   # indices of detected positions that correspond to interbank phases.
   NoMudBankInd <- which(mudbanks_selection$pos %in% NoMudBankPos)
+  # points that potentially correspond to interbank phases
+  NoMudBank <- mudbanks_selection[which(mudbanks_selection$pos %in% NoMudBankPos),]
+  # NoMudBank_sp <- sp_pnt_ee(NoMudBank$x,
+  #                           NoMudBank$y,
+  #                           'NoMudBank',
+  #                           "red")
   
-  # or based on localMin
-  # noMudBank <- mudbanks_selection[NoMudBankInd, ] 
-  # noMudBank_Sp <- sp_pnt_ee(noMudBank$x,
-  #                           noMudBank$y,
-  #                       'low super smoothed peak',
-  #                       "#e0f3db")
-  
-  # first + non_outliers + coastline_selection + nonsense_sp + outliers_sp +
-    # pos_slopes + noMudBank_Sp + localMin_sp
-
+  # row indices in mudbanks_selection
   indicesToDrop <- unique(c(indicesSlopes, NoMudBankInd))
   
+  # row numbers in the original mudbanks dataframe that correspond to these observations
   # Create unique combinations to look for in the original mudbanks:
   combinations <- rbind(combinations, data.frame(DATE_ACQUIRED = rep(i, length(indicesToDrop)),
                              pos = mudbanks_selection$pos[indicesToDrop],
                              dropClass = mudbanks_selection$dropClass[indicesToDrop]))
-  
-  rownr <- c() # row numbers in the mudbanks that correspond to these combinations
-  for(r in seq(nrow(combinations))){
-    
-    # look up every combination
-    rownr <- rbind(rownr, which(mudbanks3$DATE_ACQUIRED == combinations[r,1] &
-                                  mudbanks3$pos == combinations[r,2] &
-                                  mudbanks3$dropClass == combinations[r,3]))
-  }
-  
-  # again update mudbank Selection by removing outliers
-  mudbanks_selection <- mudbanks_selection[-indicesToDrop, ]
-  indicesToDrop2 <- c(0) # for the final bit
 
+  rownrTest <- combinations %>% 
+    left_join(mudbanks3, 
+            c("DATE_ACQUIRED" = "DATE_ACQUIRED",
+              "dropClass" = "dropClass",
+              "pos" = "pos"), keep = F
+  ) %>%
+    dplyr::select(c(pos, dropClass, DATE_ACQUIRED,rowNR))
+  rownr <- rownrTest$rowNR # rownumbers in original data frame
+
+  # again update mudbanks_selection by removing outliers
+  mudbanks_selection <- mudbanks_selection[-indicesToDrop, ]
+  
   # apply outlier detection to remaining points 
+  indicesToDrop2 <- c(0) # for the final bit
   for (pnt in unique(mudbanks_selection$pos)){
+    # pnt <-  unique(mudbanks_selection$pos)[2]
+    
     selected_point <- subset(mudbanks_selection, pos == pnt)
 
     # select nearby points
     ajoining_points <- subset(mudbanks_selection, 
-                              as.character(pos) <=  as.numeric(as.character(selected_point$pos[1]))+4000 &
-                              as.character(pos) >= as.numeric(as.character(selected_point$pos[1]))-4000 &
-                              as.character(pos) != as.numeric(as.character(selected_point$pos[1])))
+                                  pos %in% seq(selected_point$pos[1]-4000,
+                                           selected_point$pos[1]+4000,1000) &
+                              pos != selected_point$pos[1])
 
     combined <- rbind(selected_point,ajoining_points)
     
@@ -504,9 +505,13 @@ for (i in uniqueDates){
       
       # calculate second order polynomial 
       lm.out<-lm(datatest$distances ~ poly(as.numeric(datatest$positions),2))
-      r2 <- summary(lm.out)$r.squared # or adjusted r2?
-      p <- summary(lm.out)                # should be <0.05?
-      fstat <- summary(lm.out)$fstatistic # 
+      # plot(as.numeric(datatest$positions), datatest$distances)
+      
+      
+      # statSummary <- summary(lm.out)
+      # r2 <- statSummary$r.squared # or adjusted r2?
+      # p <- statSummary             # should be <0.05?
+      # fstat <- statSummary$fstatistic # 
 
       # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
       # test if no error/warning
@@ -531,12 +536,13 @@ for (i in uniqueDates){
     # test the selected position index of the outlier
     # if it is selected point of interest; consider it as outlier 
     
-    if(length(outlier$positions) > 0){
-      if (outlier$positions == unique(selected_point$pos)){
+    if(length(outlier$positions) > 0 &
+       outlier$positions == unique(selected_point$pos)){
+      # if (outlier$positions == unique(selected_point$pos)){
         # print(paste0('true for pos: ', unique(selected_point$pos)))
         
         # row numbers of the outliers in the original dataFrame
-        rownr <- rbind(rownr, which(mudbanks3$DATE_ACQUIRED == i &
+        rownr <- c(rownr, which(mudbanks3$DATE_ACQUIRED == i &
                                       mudbanks3$pos == outlier$positions &
                                       mudbanks3$dropClass == outlier$dropClass))
         
@@ -545,17 +551,17 @@ for (i in uniqueDates){
                                 which(mudbanks_selection$DATE_ACQUIRED == i &
                                         mudbanks_selection$pos == outlier$positions &
                                         mudbanks_selection$dropClass == outlier$dropClass))
-      }
+      # }
       
     }
 
   }
   
   # also here overwrite the amount of observations that are not an outlier
-  mudbanks_selection <- mudbanks_selection[-indicesToDrop2, ]
+  # mudbanks_selection <- mudbanks_selection[-indicesToDrop2, ]
 
-  mudbanks3[unique(rownr[,1]), "mudbank_outlier"] <-
-    as.data.frame(mudbanks3[unique(rownr[,1]),"mudbank_outlier"])[,1] + 1
+  mudbanks3[unique(rownr), "mudbank_outlier"] <-
+    as.data.frame(mudbanks3[unique(rownr),"mudbank_outlier"])[,1] + 1
 
 }
 
@@ -592,64 +598,100 @@ mudbanks5$distX <- NA
 mudbanks5$distY <- NA
 mudbanks5$medianOffshore <- NA
 
-# get median position for each year
-# only for pos which are considered to have a mudbank!
-# also exclude outliers and nonsense observations
-for(y in 1:length(all_years)){
-  # y <- 4
-  # selected_year <- '2008-01-01'
-  selected_year <- all_years[y]
-  
-  
-  for (p in 1:length(group_pos)){
-    # p = 92#113
-    position = group_pos[p]
-    # position = 32000
-    
-    subsets <- subset(mudbanks5, year_col == selected_year &
-                        pos == position &
-                        axisDist > 0 & # nonsens observations (or use mudbank extent?)
-                        mudbank_outlier == 0 & # no outlier
-                        noMudbank == 0) # positions that are indicated as mudbank
-    
-    if (nrow(subsets) > 1){
-      
-      # get the distance;
-      # meanOffshore <- mean(subsets$axisDist, na.rm = T)
-      medianOffshore <- median(subsets$axisDist, na.rm=T)
-      
-      bearing <- median(subsets$bearing)
-      originX <- median(subsets$originX)
-      originY <- median(subsets$originY)
-      
-      # set origin at correct location or add coastline dist to dist of interest?
-      destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
-                                           CRS("+proj=longlat +datum=WGS84")),
-                             bearing, medianOffshore)
-      
-      # in the original file all rows recieve the distX
-      rowNumbers <- which(mudbanks5$year_col == selected_year &
-                            mudbanks5$pos == position)
-      
-      mudbanks5$distX[rowNumbers] <- destPoint[1]
-      mudbanks5$distY[rowNumbers] <- destPoint[2]
-      mudbanks5$medianOffshore[rowNumbers] <-  medianOffshore
-    }
-  }
-}
 
-
-# set NA to -1?
+# test piping workflow on one subset
 mudbanks6 <- mudbanks5 %>%
-  dplyr::group_by(pos, year_col) %>%
+# subsetTest <- 
+  # subset(mudbanks5, year_col == '2016-01-01' &
+                      # pos == 85000) %>%
+  group_by(year_col, pos) %>%
+  dplyr::mutate(toFilter = ifelse(axisDist > 0 &
+                                    mudbank_outlier == 0 & # no outlier
+                                    noMudbank == 0
+                                  ,0,1)) %>%
+  group_by(year_col, pos, toFilter) %>%
   
-  dplyr::mutate(distX = ifelse(is.na(distX), # replace NA with the calculated annual mudbank position
-                                    Mode(distX), distX)) %>%
-  dplyr::mutate(distY = ifelse(is.na(distY), # replace NA with the calculated annual mudbank position
-                               Mode(distY), distY)) %>%
-  dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), # replace NA with the calculated annual mudbank position
-                               Mode(medianOffshore), medianOffshore)) %>%
-  ungroup()
+  # all obesrvations that have a valid mudbank observation
+  dplyr::mutate(medianOffshore = ifelse(toFilter == 0, 
+                                        median(axisDist, na.rm=T), NA)) %>%
+
+  group_by(year_col, pos) %>%
+  # invalid mudbank observations are filled per year and group
+  dplyr::mutate(medianOffshore = fill_NA(medianOffshore)) %>%
+
+  # some positions are not assigned as mudbank observation
+  # they require a filled medianOffshore of 0
+  dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore),
+                                        0,medianOffshore )) %>%
+  
+  ungroup() %>%
+  # dplyr::mutate(countObs= n_distinct(DATE_ACQUIRED)) %>%
+
+  # calculate coordinates coorsponding to median offshore distance
+  dplyr::mutate(distX = func_destP(originX, originY,bearing,medianOffshore)[1,1],
+                distY = func_destP(originX, originY,bearing,medianOffshore)[1,2]) %>%
+  dplyr::select(!c(toFilter))
+
+
+
+# # get median position for each year
+# # only for pos which are considered to have a mudbank!
+# # also exclude outliers and nonsense observations
+# for(y in 1:length(all_years)){
+#   # y <- 4
+#   # selected_year <- '2016-01-01'
+#   selected_year <- all_years[y]
+# 
+# 
+#   for (p in 1:length(group_pos)){
+#     # p = 92#113
+#     position = group_pos[p]
+#     # position = 85000
+# 
+#     subsets <- subset(mudbanks5, year_col == selected_year &
+#                         pos == position &
+#                         axisDist > 0 & # nonsens observations (or use mudbank extent?)
+#                         mudbank_outlier == 0 & # no outlier
+#                         noMudbank == 0) # positions that are indicated as mudbank
+# 
+#     if (nrow(subsets) > 1){
+# 
+#       # get the distance;
+#       # meanOffshore <- mean(subsets$axisDist, na.rm = T)
+#       medianOffshore <- median(subsets$axisDist, na.rm=T)
+# 
+#       bearing <- median(subsets$bearing)
+#       originX <- median(subsets$originX)
+#       originY <- median(subsets$originY)
+# 
+#       # set origin at correct location or add coastline dist to dist of interest?
+#       destPoint <- destPoint(SpatialPoints(data.frame(x = originX, y = originY),
+#                                            CRS("+proj=longlat +datum=WGS84")),
+#                              bearing, medianOffshore)
+# 
+#       # in the original file all rows recieve the distX
+#       rowNumbers <- which(mudbanks5$year_col == selected_year &
+#                             mudbanks5$pos == position)
+# 
+#       mudbanks5$distX[rowNumbers] <- destPoint[1]
+#       mudbanks5$distY[rowNumbers] <- destPoint[2]
+#       mudbanks5$medianOffshore[rowNumbers] <-  medianOffshore
+#     }
+#   }
+# }
+
+
+# # set NA to -1?
+# mudbanks6 <- mudbanks5 %>%
+#   dplyr::group_by(pos, year_col) %>%
+#   
+#   dplyr::mutate(distX = ifelse(is.na(distX), # replace NA with the calculated annual mudbank position
+#                                     Mode(distX), distX)) %>%
+#   dplyr::mutate(distY = ifelse(is.na(distY), # replace NA with the calculated annual mudbank position
+#                                Mode(distY), distY)) %>%
+#   dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), # replace NA with the calculated annual mudbank position
+#                                Mode(medianOffshore), medianOffshore)) %>%
+#   ungroup()
 
 # export 
 for (year in unique(format(as.Date(uniqueDates), '%Y'))){
@@ -662,25 +704,25 @@ for (year in unique(format(as.Date(uniqueDates), '%Y'))){
                              as.Date(DATE_ACQUIRED) >= start_year &
                              as.Date(DATE_ACQUIRED) <= end_year)
   
-  testForExport <- mudbanks_per_year %>% 
-    dplyr::select(c(maxExtentX, maxExtentY, pos,DATE_ACQUIRED,SmoothedPeak,
-                    axisDist, mudbank_outlier, validMudbankObs, dropClass,
-                    distX, distY, medianOffshore)) %>%
-    dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), -1, coastDist))
+  # testForExport <- mudbanks_per_year %>% 
+  #   dplyr::select(c(maxExtentX, maxExtentY, pos,DATE_ACQUIRED,SmoothedPeak,
+  #                   axisDist, mudbank_outlier, validMudbankObs, dropClass,
+  #                   distX, distY, medianOffshore, coastDist)) %>%
+  #   dplyr::mutate(medianOffshore = ifelse(is.na(medianOffshore), -1, coastDist))
+  # 
+  # sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
   
-  sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
   
+  # fileN <- paste0(aoi,'_',year,'_coastlines')
+  # assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
   
-  fileN <- paste0(aoi,'_',year,'_coastlines')
-  assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
-  
-  task_vect <- ee_table_to_asset(
-    collection = sf_to_ee,
-    description = fileN,
-    assetId = assetid,
-    overwrite = TRUE
-  )
-  task_vect$start()
+  # task_vect <- ee_table_to_asset(
+  #   collection = sf_to_ee,
+  #   description = fileN,
+  #   assetId = assetid,
+  #   overwrite = TRUE
+  # )
+  # task_vect$start()
 
   write_csv(mudbanks_per_year, paste0(wd,"/data/processed/offshore_points/", aoi,
                                       '_', year, '_offshore.csv'))
