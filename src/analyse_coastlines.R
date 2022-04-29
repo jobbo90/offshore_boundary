@@ -720,6 +720,7 @@ library(ggpubr)
 allFiles_annual <- transform(allFiles_annual,
                              Country=factor(Country, levels=c("FrenchGuiana","Suriname","Guyana")))
 
+# important to use normalized (2006-01-01) and not normalized2 (1985-01-01)
 temporalTrend <- ggplot(data = allFiles_annual,
             aes(x=as.Date(year_col),y = normalized, 
                 colour = Country
