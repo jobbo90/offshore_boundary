@@ -53,10 +53,10 @@ buffer = c(5, 10, 15)             # 5,10, 15
 lengthmax = c(10, 25,50,75)     # 10,25, 50, 75
 sigma = c(0.3, 0.5, 0.7, 0.9, 1) # 0.3, 0.5, 0.7, 0.9, 1
 cannyThreshold = c(0.7, 0.9, 1.1, 1.3)          # 0.7, 0.9, 1.1, 1.3 
-daterange = c('195-01-01', '2020-12-31')
-aoi = c('Suriname') # FrenchGuiana
-# dataFolder <- './data/raw/GEE_exports/EM_stats'
-dataFolder <- './data/raw/GEE_exports/EM_stats/20210831'
+daterange = c('1985-01-01', '2020-12-31')
+aoi = c('Brazil') # FrenchGuiana / Suriname / Guyana / Brazil
+dataFolder <- './data/raw/GEE_exports/EM_stats'
+# dataFolder <- './data/raw/GEE_exports/EM_stats/20210831'
 
 # control values to plot on y-axis
 pattern = 'ndwi_threshold'       # ndvi_rightPeak / ndwi_threshold / ndwi_TIRintertide / ndwi_maxWater
@@ -68,7 +68,7 @@ boxes <- 'length'        # sigma  / MinimalGradient / buffer / length
 
 # what to draw
 drawSignatures <- 0   #  (0 / 1)
-drawObsDrops   <- 0
+drawObsDrops   <- 1
 drawThresholds <- 0
 colnames_ofInterest <- c('ndvi_rightPeakLower', 'ndvi_rightPeakUpper', 
                          'ndvi_leftPeakLower', 'ndvi_leftPeakUpper', 
@@ -601,8 +601,8 @@ if(drawObsDrops > 0){
 
   barPlot
   
-  # ggsave(filename = paste0("./results/temp_maps/",aoi,
-  #                          '_imageCount','_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-  #        width = 20.1, height = 7.25, units = c('in'), dpi = 1200)
+  ggsave(filename = paste0("./results/temp_maps/",aoi,
+                           '_imageCount','_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+         width = 20.1, height = 7.25, units = c('in'), dpi = 1200)
   
 }

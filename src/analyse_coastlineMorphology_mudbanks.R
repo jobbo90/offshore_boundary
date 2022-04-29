@@ -1140,6 +1140,81 @@ resilience
 #                             format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 # width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
+
+#################################
+#'   
+#'   spatial perspective of coastline 'stability'
+#'   Part of Figure 9 (each country seperately)
+#'
+
+# region <- c('cayenne')
+Cntry <- c('Guyana')
+
+toPlotSpatial <- allFiles_posMudbank %>%
+  filter(Country == Cntry) %>%
+  dplyr::mutate(sign = as.factor(sign(withMudbank_myr + withoutMudbank_myr)))
+
+spatialVariability <- ggplot(toPlotSpatial, 
+                             aes(x=pos/1000, y= withMudbank_myr + withoutMudbank_myr, 
+                             )) +
+  geom_hline(yintercept = 0) +
+  geom_linerange(data = toPlotSpatial, 
+                 aes(ymin = 0, ymax = withMudbank_myr+ withoutMudbank_myr, 
+                     colour = ifelse(withMudbank_myr + withoutMudbank_myr <0, 
+                                     "blue", "red")),
+                 stat = "identity",
+                 position = "identity",size=2) + 
+  scale_color_manual(values = c("#f4a582", "#92c5de")) +
+  scale_y_continuous(position = "right") +
+  labs(y="m/yr", x = "alongshore position [km]") + 
+  theme(axis.line.x = element_blank(),
+        axis.line.y = element_line(size = 0.5, colour = "black"),
+        axis.line = element_line(size= 1, colour = "black"),
+        axis.title.y = element_text(size = 20, face = 'bold'),
+        axis.title.x =element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
+        legend.title = element_blank(), 
+        axis.ticks.x = element_blank(),
+        
+        legend.key=element_blank(),
+        legend.position = 'none',
+        legend.text = element_text(size = 20),
+        panel.grid.major = element_blank(), # remove grid lines
+        panel.grid.minor = element_blank(), 
+        panel.background = element_rect(fill = "transparent"), #element_blank(),
+        strip.text.x = element_blank(),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        
+  )
+
+spatialVariability
+
+# 
+# ggsave(spatialVariability, filename = paste0("./results/temp_maps/", Cntry,'spatialVariability',
+#                                         '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# 
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ###############################
 ##'
 ##' 
