@@ -53,17 +53,31 @@ dataFolder <- './data/processed'
 years <- seq(from = 1985, to = 2020, by = 1)
 aoi <- c('Suriname') # FrenchGuiana / Guayana / Suriname
 
+# near river mouths estimates for coastlines in old version of GEE script are 
 # pos to exlcude for mudbank boundary estimates / outlier detection
-posToExcludeSUR <- c(seq(138000,147000,1000),
-                     seq(241000, 255000, 1000))  
+posToExcludeSUR <- c(
+  seq(130000,137000,1000), # coppename
+  seq(234000, 243000, 1000)) # Suriname River
 
-posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
-                    seq(315000,334000,1000),# baia oiapoque 
-                    seq(223000,225000,1000), # orapu
-                    seq(205000,207000,1000) # cayenne
+posToExcludeFG <- c(
+  seq(261000,270000,1000), # approuage River
+  seq(315000,334000,1000),# baia oiapoque 
+  seq(223000,225000,1000), # orapu
+  seq(205000,207000,1000), # cayenne
+  seq(335000,403000,1000) # Brazil
+) 
+posToExcludeGUY <- c(
+  seq(0,39000,1000), # Venezuela
+  seq(527000,532000,1000), # Courantyne River
+  seq(460000, 462000,1000),# berbice River
+  seq(364000,365000,1000), # demerara River
+  seq(294000,345000,1000), # Essequibo River delta
+  seq(72000,74000,1000) # waini River
 ) 
 
-posToExclude <- posToExcludeSUR
+allPos <- list('Suriname' = posToExcludeSUR, 
+               "FrenchGuiana" = posToExcludeFG,
+               "Guyana" = posToExcludeGUY )
 
 # select folders
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/offshore_points'), full.names = T))

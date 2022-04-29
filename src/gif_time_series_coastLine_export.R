@@ -46,33 +46,54 @@ source("./src/packages.R")       # loads up all the packages we need
 
 ee_Initialize()
 ## ---------------------------
-source("./src/functions.R")
 
+# Rewrite table
+rewrite <- function(txt){
+  #' @title rewrite  character strings
+  #' @description this function rewrites 
+  #' character strings to lists with tibble
+  #' @param txt character string
+  #' @return return the list
+  return(tibble::tibble(text = c(txt)))
+  
+}
+
+# detect string to to_keep 
+to_keep <- function(fixed_string, text) {
+  #' @title string to keep
+  #' @description detect string in text
+  #' @param fixed_string the pattern to match
+  #' @param text the text to search in
+  #' @return string to keep
+  return(stringr::str_detect(text, stringr::fixed(fixed_string, ignore_case = TRUE)))
+}
 
 ## ---------------------------
 
 # mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/processed'
+# dataFolder <- 'D:/WOTRO/Research/Software/Projects/offshore_boundary/data/processed/coastlines'
+
 
 mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 leaflet() %>%
   addProviderTiles("Esri.WorldImagery")
 
-years <- seq(from = 1985, to = 2020, by = 1)
+years <- seq(from = 1985, to = 2021, by = 1)
 
-# near river mouths estimates for coastlines in old version of GEE script are 
-# questionable, should partially be solved in newest versions (11-2-2021)
-posToExclude <- c(seq(139000,147000,1000),
-                  seq(241000, 255000, 1000))  
+# # near river mouths estimates for coastlines in old version of GEE script are 
+# # questionable, should partially be solved in newest versions (11-2-2021)
+# posToExclude <- c(seq(139000,147000,1000),
+#                   seq(241000, 255000, 1000))  
 
-reference_date <- as.Date("2020-01-01")
+reference_date <- as.Date("1985-01-01")
 aoi <- c('Suriname') 
 
 # select folders
-folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
+folderSelect <- as.matrix(list.files(paste0(dataFolder), full.names = T))
 df <- rewrite(folderSelect);
 # only csv's
-df <- df[grep('.csv', folderSelect, ignore.case = T),]
+df <- df[grep('coastlines.csv', folderSelect, ignore.case = T),]
 
 
 filtered <- vector('list', 100)
@@ -99,15 +120,13 @@ for (q in seq_along(years)) {
 filtered <- unique(filtered)
 
 # bind_rows!!!
-allFiles <- do.call(bind_rows, 
-                    lapply(as.matrix(filtered)[,1], 
-                           function(x) read.csv(x, stringsAsFactors = FALSE,
-                                          sep = ',', na.strings=c("","NA"))
-                           ))
+allFiles <-unique(do.call(rbind, lapply(as.matrix(filtered)[,1],
+                                        function(x) read.csv(x,
+                                                             stringsAsFactors = FALSE,
+                                                             sep = ',',
+                                                             na.strings=c("","NA")
+                                        ))))
 
-# where are the duplicates comming from when loading? 
-allFiles3 <- allFiles %>% group_by_at(vars(DATE_ACQUIRED, pos)) %>% 
-  filter(n()>1) %>% ungroup()
 
 col_dates <- col_of_interest(allFiles, 'DATE_ACQUIRED$')
 col_coastDist <- col_of_interest(allFiles, 'coastDist$')

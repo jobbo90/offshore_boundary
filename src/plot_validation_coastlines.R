@@ -459,7 +459,6 @@ for (groupScenario in unique(scenarioTable$referenceDate)){
   
 }
 
-# 10^1.2
 
 output <- subset(output, pattern != c('dike_NA'))
 
@@ -474,7 +473,7 @@ totalBox <- ggplot(output, aes(x=as.factor(shape), y = distance,
   geom_boxplot(outlier.colour="black", outlier.size=2, width=0.6,
                position=position_dodge(width = 1)) +
   stat_summary(fun.data = n_fun, geom = "text",  hjust = 0.5, vjust = 2.25,
-               angle = 45, position = position_dodge2(1)) +
+               angle = 45, position = position_dodge2(1), size = 7) +
   
   scale_y_continuous(breaks = c(0, 30, seq(100,round(max(output$distance), -2),100))) +
   ylab('offset [m]') +
@@ -506,9 +505,15 @@ totalBox <- ggplot(output, aes(x=as.factor(shape), y = distance,
 
 totalBox
 
-# ggsave(totalBox, filename = paste0("./results/Validation/", 'allUAV_estimated_accuracy',
-# '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-# width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+ggsave(totalBox, filename = paste0("./results/Validation/", 'allUAV_estimated_accuracy',
+        '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+# ggsave(plot = totalBox, filename = paste0("D:/WOTRO/Research/Reporting/Publications/",
+#                                        "AlongshoreVariability_mudbanks/submissionFiles/",
+#                                        "figures/Figure_A6.pdf"),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
 
 meanVals <- output %>%
   dplyr::group_by(aoi, label) %>%
@@ -551,10 +556,14 @@ daysFromObs <- ggplot(output, aes(x = dayDifference, y = meanDist,
   )
 daysFromObs
 
-ggsave(daysFromObs, filename = paste0("./results/Validation/", 'allUAV_mean_accuracy',
-'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# ggsave(daysFromObs, filename = paste0("./results/Validation/", 'allUAV_mean_accuracy',
+# '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+# width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
+ggsave(plot = daysFromObs, filename = paste0("D:/WOTRO/Research/Reporting/Publications/",
+                                          "AlongshoreVariability_mudbanks/submissionFiles/",
+                                          "figures/Figure_A5.pdf"),
+       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # controls the panels
 facet <- 'uavdate'  
@@ -648,9 +657,9 @@ boxplot<- ggplot(output2, aes(x=eval(as.name(xaxis)), y = distance,
 boxplot
 
 datesForExport <- paste0(unique(format(as.Date(reference_dates), "%Y")), collapse = '_')
-ggsave(filename = paste0("./results/Validation/", unique(scenarioTable$aoi), '_',datesForExport, '_coastlines_',
-        '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# ggsave(filename = paste0("./results/Validation/", unique(scenarioTable$aoi), '_',datesForExport, '_coastlines_',
+#         '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # read transects
 # transects <- rewrite(as.matrix(list.files(paste0('./data/raw/shapes/transects')), full.names = T)) %>%

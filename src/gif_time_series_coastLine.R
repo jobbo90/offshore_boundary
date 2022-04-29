@@ -58,8 +58,8 @@ years <- seq(from = 1985, to = 2020, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # questionable, should partially be solved in newest versions (11-2-2021)
-posOfInterest <- c(50000, 210000, 310000)
-posToPlot <- 50000#138000#156000#230000
+# posOfInterest <- c(50000, 210000, 310000)
+posToPlot <- 210000#138000#156000#230000
   
 reference_date <- as.Date("2020-01-01")
 aoi <- c('Suriname') 
@@ -68,7 +68,7 @@ aoi <- c('Suriname')
 folderSelect <- as.matrix(list.files(paste0(dataFolder, '/coastlines'), full.names = T))
 df <- rewrite(folderSelect);
 # only csv's
-df <- df[grep('.csv', folderSelect, ignore.case = T),]
+df <- df[grep('coastlines.csv', folderSelect, ignore.case = T),]
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
@@ -93,12 +93,11 @@ for (q in seq_along(years)) {
 }
 filtered <- unique(filtered)
 
-# bind_rows!!!
-allFiles <- do.call(bind_rows, 
-                    lapply(as.matrix(filtered)[,1], 
-                           function(x) read.csv(x, stringsAsFactors = FALSE,
-                                                sep = ',', na.strings=c("","NA")
-            )))
+allFiles <- unique(do.call(rbind, lapply(as.matrix(filtered)[,1], 
+                                         function(x) read.csv(x, stringsAsFactors = FALSE,
+                                                              sep = ',', 
+                                                              na.strings=c("","NA")
+                                         ))))
 
 # where are the duplicates comming from when loading? 
 allFiles3 <- allFiles %>% 
@@ -138,7 +137,7 @@ df_img <- unique(df_img[grep('.tif', imgSelect, ignore.case = T),])
 #' 
 #---------------------------
 
-allFiles_POS<- subset(allFiles, (pos %in% posToPlot))
+allFiles_POS <- subset(allFiles, (pos %in% c(380000-posToPlot)))
 
 # all unique dates
 uniqueDates <- unique(allFiles_POS[,col_dates])
@@ -222,7 +221,10 @@ ext <- extent(bbox_buf)
 
 # create ggplot with time series (only needed once!)
 
-maxVal <- max(allFiles_mutate$coastDist, na.rm = T)
+maxVal <-quantile(allFiles_mutate$coastDist,c(0.99),
+                  na.rm=T)
+#max(allFiles_mutate$coastDist, na.rm = T)
+
 minVal <- min(allFiles_mutate$coastDist, na.rm = T)
 
 time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastDist)) + # color=coast_outlier)
@@ -240,7 +242,7 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
   scale_y_continuous(limits=c(minVal, maxVal+100)) +
   
   scale_x_date(labels = date_format("%Y")) +
-  ggtitle( paste0('position: ', posToPlot)) +
+  ggtitle( paste0('position: ', c(380000-posToPlot))) +
   labs(x = "year", y = "Distance coastline position") +
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
@@ -255,7 +257,7 @@ time_series <- ggplot(allFiles_mutate, aes(x= as.Date(DATE_ACQUIRED), y = coastD
         # legend.text = element_text(size = 15),
         plot.title = element_text(hjust = 0.5, size = 18, face = 'bold',
                                   vjust = -2), 
-        legend.position = c(.88, .22),
+        legend.position = c(.88, .72),
         panel.grid.major = element_blank(), # remove grid lines
         panel.grid.minor = element_blank(), 
         panel.background = element_blank(),
