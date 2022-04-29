@@ -21,7 +21,7 @@
 #'
 ## ---------------------------
 
-rm(list = ls())
+# rm(list = ls())
 wd<-getwd()
 
 ## ---------------------------
@@ -40,44 +40,32 @@ source("./src/functions.R")
 ## ---------------------------
 
 
-seq2 <- seq(1985, 2020, 1)
-years <- c(seq2)
+aoi <-  c('Suriname') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
+years <- c(seq(1985, 2021, 1))
 
-# pos to exlcude for mudbank boundary estimates / outlier detection
-posToExcludeSUR <- c(seq(138000,147000,1000),
-                  seq(241000, 255000, 1000))  
+path_rowsSUR <- c( '229_56', '228_56', '230_56') # Suriname
+path_rowsFG <- c('226_57', '227_56', '227_57', '228_56') #FrenchGuiana
+path_rowsGUY <- c('230_56', '231_55', '232_54') #Guyana
 
-posToExcludeFG <- c(seq(261000,270000,1000), # approuage River
-                    seq(315000,3340000,1000),# baia oiapoque 
-                    seq(223000,2250000,1000), # orapu
-                    seq(205000,2070000,1000), # cayenne
-) 
-
-posToExclude <- c(0)
+path_rows <- list('Suriname' = path_rowsSUR, 
+               "FrenchGuiana" = path_rowsFG,
+               "Guyana" = path_rowsGUY )
+path_rows <- path_rows[[aoi]]
 
 min_Std <- 25   # minimal amount of meters difference before considered outlier
 year_limit <- 4 # search window in years for finding coastline obs when insufficient values per year.
 min_obs_rosner <- 10    # Amount of obs needed to perform statistical test
 
 exportCoasts <- T
-
-# mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
-# leaflet() %>%
-#   addProviderTiles("Esri.WorldImagery")
-
-dataFolder <- './data/raw'
- 
+includeT2 <- F
 
 # select folders
-folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), full.names = T))
+dataFolder <- './data/raw'
+folderSelect <- as.matrix(list.files(paste0(dataFolder, '/GEE_exports'), 
+                                     full.names = T))
 df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('.csv', folderSelect, ignore.case = T),]
-aoi <-  c('Guyana') # Suriname / Braamspunt / WegNaarZee / FrenchGuiana / Guyana
-
-# path_rows <- c( '229_56', '228_56', '230_56') # '228_56','230_56'
-# path_rows <- c('226_57', '227_56', '227_57', '228_56_') #FrenchGuiana
-path_rows <- c('230_56', '231_55', '232_54') #Guyana
 
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
@@ -101,75 +89,95 @@ for (q in seq_along(years)) {
                          ))}
 }}
 filtered <- unique(filtered)
-allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], function(x) read.csv(x, stringsAsFactors = FALSE,
-                                                                                sep = ',', na.strings=c("","NA")
-                                                                            )))
+
+fileDate <- as.Date(file.info(as.matrix(filtered)[1,1])$mtime, format = 'YYYY-mm-dd')
+
+allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], 
+                                      function(x) read.csv(x, stringsAsFactors = FALSE,
+                                                           sep = ',', na.strings=c("","NA")
+                                                           )
+                                      %>% mutate(`DateCreated` = as.Date(file.info(x)$mtime, format = 'YYYY-mm-dd'))
+                                      ))
+
+
 # remove duplicate entries (31-12-yyyy occasionaly occurs double)
+duplicates <- allFiles %>% 
+    group_by_at(vars(DATE_ACQUIRED, pos,areaName)) %>%
+    filter(n()>1) %>%
+    ungroup()
+
 allFiles <- unique(allFiles) 
+allFiles$Country = aoi
+
+# if Country is Suriname flip files 
+# (necessary for GEE exports processed before 1-1-2022)
+# make sure the positions are correct with processing after the new date.
+MaxPos <- max(allFiles[allFiles$Country=='Suriname', "pos"])
+allFiles <- allFiles %>% 
+  dplyr::mutate(pos = ifelse(Country == "Suriname" & DateCreated < "2022-01-01", 
+                             abs(pos-MaxPos),
+                             pos))
+# test if the flipped worked
+testPos <- allFiles %>%
+  group_by_at(vars(DATE_ACQUIRED, pos,areaName)) %>%
+  filter(areaName == '228_56') %>%
+  dplyr::mutate(posDif = pos2 - pos)
+# filter(DateCreated > "2022-01-01")
+# sort(unique(testPos$pos))
 
 # all dates
-uniqueDates <- unique(allFiles[,col_of_interest(allFiles, 'DATE_ACQUIRED$')]);
-drop <- c('system.index', '.geo')
+uniqueDates <- unique(allFiles[,col_of_interest(allFiles, 'DATE_ACQUIRED$')])
+drop <- c('system.index', '.geo', 'DateCreated')
 keep_columns <- colnames(allFiles)[!(colnames(allFiles) %in% drop)]
+
+# reformat collectionType if necessary (in old version collection type was not included)
+# first runs where T1 only
+if(is.null(allFiles$collectiontype)){
+  allFiles$collectiontype <- 'T1'
+}
+
+allFiles$collectiontype[which(is.na(allFiles$collectiontype))] <- 'T1'
+
+# include T2 observations or not?
+if(includeT2 != T){
+  
+  allFiles <- subset(allFiles, collectiontype!="T2")
+  
+  print('T2 obsevations are NOT included')
+}
 
 
 # prep input to sf data.frame class
 coastlines <- reshape_csvPoints(allFiles, 'coastX', 'coastY', keep_columns)
-# coastX / coastY
+
 # change all -1 to NA
 # these are the transect that resulted in no coastline estimate
 coastlines$coastDist[coastlines$coastX == -1] <- NA
 
 # sort al rows based on position & date
-coastlines<-coastlines[with(coastlines, order(pos, DATE_ACQUIRED)), ]
+coastlines<-coastlines[with(coastlines, order(pos, DATE_ACQUIRED,collectiontype)), ]
 
 # make groups per year, 3 months and 3 years per transect
 coastlines <- coastlines %>%
-  dplyr::mutate(quarterly_col = as.Date(cut(lubridate::date(coastlines$DATE_ACQUIRED),
+  # classifiy into wet or dry season
+  dplyr::mutate(seasons = ifelse(as.Date(month(DATE_ACQUIRED)) < 5 |
+                                   as.Date(month(DATE_ACQUIRED)) >11,
+                                 'wet','dry'
+                                 )) %>%
+  
+  dplyr::mutate(quarterly_col = as.Date(cut(lubridate::date(DATE_ACQUIRED),
                                      "3 month"))) %>%
-  dplyr::mutate(date_col = as.Date(cut(lubridate::date(coastlines$DATE_ACQUIRED), 
+  dplyr::mutate(date_col = as.Date(cut(lubridate::date(DATE_ACQUIRED), 
                                 "3 year"))) %>%
-  dplyr::mutate(five_year_col = as.Date(cut(lubridate::date(coastlines$DATE_ACQUIRED), 
+  dplyr::mutate(five_year_col = as.Date(cut(lubridate::date(DATE_ACQUIRED), 
                                 "5 year"))) %>%
-  dplyr::mutate(year_col = as.Date(cut(lubridate::date(coastlines$DATE_ACQUIRED),
+  dplyr::mutate(year_col = as.Date(cut(lubridate::date(DATE_ACQUIRED),
                                 "1 year"))) 
 
 group_dates<-unique(coastlines$year_col)        # yearly
 group_pos <- unique(coastlines$pos)             # All unique positions (transect number)
 group_years <- unique(coastlines$date_col)      # per 3 year
 five_years <- unique(coastlines$five_year_col)
-
-pol <- ee$Geometry$Polygon(
-  coords = list(
-    c(-56.856912, 5.836168),
-    c(-56.821485, 6.120976),
-    c(-54.262531, 6.009777),
-    c(-54.255509, 5.772303)
-  ),
-  proj = "EPSG:4326",
-  geodesic = FALSE
-)
-
-# for testing / visualization define an imageCollection
-collectionL4 <- ee$ImageCollection("LANDSAT/LT04/C01/T1_TOA")$
-  filterBounds(pol)
-
-collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")$
-  filterBounds(pol)
-
-collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")$
-  filterBounds(pol)
-
-collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")$
-  filterBounds(pol)
-
-collection <- collectionL8$merge(collectionL5)$merge(collectionL7)$
-  merge(collectionL4)
-
-vizParams = list(
-  bands = c("B5", "B4", "B3"),
-  min = 0.05, max = 0.5, gamma = 1.4
-)
 
 #'
 #'  estimate coastal outliers with rosner test
@@ -182,12 +190,61 @@ coastlines$coast_outlier <- 1
 coastlines$slope         <- NA
 coastlines$coastObs      <- NA
 
-for(i in group_years){ 
+for(q in group_pos){ 
+  svMisc::progress(q, max.value = nrow(group_pos))
+  # q<-group_pos[group_pos==330000] # 330
+  # 
+  # indexs2 <- which(coastlines$pos == q &
+  #                   coastlines$coastX != -1)
+  # 
+  # subsets2 <- coastlines[indexs2, ]
+  # 
+  # # calculate second order polynomial 
+  # lm.out<-lm(as.numeric(subsets2$coastDist) ~ poly(as.numeric(as.Date(subsets2$DATE_ACQUIRED)),2))
+  # 
+  # r2 <- summary(lm.out)$r.squared # or adjusted r2?
+  # # p$ <- summary(lm.out)                # should be <0.05?
+  # fstat <- summary(lm.out)$fstatistic #
+  # 
+  # # Bonferroni-adjusted outlier test (test largest absolute standardized residual)
+  # # test if no error/warning
+  # test2 <- has_error(car::outlierTest(lm.out), silent = !interactive())
+  # test3 <- has_warning(car::outlierTest(lm.out))
+  # 
+  # # Allways returns a observation (with largest Studentized residual)
+  # # Which implies it is not allways meeting the P < 0.05 cutoff value
+  # outlier_test <- if(test2|test3){car::outlierTest(lm.out_lin)} else{car::outlierTest(lm.out)}
+  # 
+  # # plot example:
+  # x <- seq(min(as.numeric(as.Date(subsets2$DATE_ACQUIRED))), 
+  #          max(as.numeric(as.Date(subsets2$DATE_ACQUIRED))), length.out = length(subsets2$coastDist))
+  # y <- predict(lm.out)
+  # predicted.intervals <- predict(lm.out,
+  #                                data.frame(x=as.numeric(as.Date(subsets2$DATE_ACQUIRED))),
+  #                                interval='confidence', level=0.99)
+  #
+  # plot(as.Date(subsets2$DATE_ACQUIRED), subsets2$coastDist)
+  # lines(as.Date(x),predicted.intervals[,1],col = 'orange')
+  # points(as.Date(subsets2$DATE_ACQUIRED)[which(subsets2$collectiontype == 'T2')],
+  #        subsets2$coastDist[which(subsets2$collectiontype == 'T2')],
+  #         col = 'red')
+  # 
+  # # rosner test would probably kick out all T2 observations?
+  # points(as.Date(subsets2$DATE_ACQUIRED)[which(rosner(subsets2$coastDist, min_Std, 15)==0)],
+  #        subsets2$coastDist[which(rosner(subsets2$coastDist, min_Std, 15)==0)],
+  #         col = 'blue')
+  # 
+  # points(as.Date(subsets2$DATE_ACQUIRED[as.numeric(names(outlier_test$rstudent))]),
+  #        subsets2$coastDist[as.numeric(names(outlier_test$rstudent))],
+  #        col = 'green')
   
-  for(q in group_pos){
-    start <- Sys.time()
+  
+  for(i in group_years){ 
+    # i<- group_years[5]
+    
+    # start <- Sys.time()
 
-    indexs <- which(coastlines$date_col == i &  # five_year_col
+    indexs <- which(coastlines$date_col == i & 
                       coastlines$pos == q &
                       coastlines$coastX != -1)
     
@@ -199,10 +256,8 @@ for(i in group_years){
     # So grow the subset to at least 10(?) obs by adding nearest observations
     maxAttemp <- 0 # make sure you don't get stuck in infinite loop..
     while(nrow(subsets3) < min_obs_rosner & 
-          # nrow(subsets3)+obs_3years > min_obs_rosner &
           maxAttemp < min_obs_rosner+5){
       
-
       # exclude dates from the year of interest
       # sample from entire dataset so that years outside the 3 year block
       # are also possible candidates
@@ -236,23 +291,21 @@ for(i in group_years){
                               coastlines$pos == q &
                               coastlines$coastX != -1)
     
+    # preferably T2 collection is not used to determine outliers when there is 
+    # 'sufficient' T1 observations.
+    
     # Only give the rosner output to the original subset3 indices
     # if there is >15 observations let K be estimated
     coastlines[indexs, 'coast_outlier'] <- 
         rosner(subsets3$coastDist, min_Std, 15)[which(subsets3_recal %in% indexs)]
     # Will throw an error/warning if all values are the same => nothing is assigned as outlier
       
-
-    end <- Sys.time()
-    dif<- difftime(end, start, "mins")
+    # end <- Sys.time()
+    # dif<- difftime(end, start, "mins")
     
-    
-    
-    if(as.numeric(dif, units="secs") > 5){
-      print(paste0(as.Date(i), ' for pos: ', q,' in ', round(dif,1), ' in ', units(dif)))
-    }
-    
-    
+    # if(as.numeric(dif, units="secs") > 5){
+    #   print(paste0(as.Date(i), ' for pos: ', q,' in ', round(dif,1), ' in ', units(dif)))
+    # }
  
   }
   suppressWarnings(remove(subsets3, indexs, reference_date,
@@ -260,8 +313,6 @@ for(i in group_years){
                           subsets3_recal))
 
 }
-
-
 
 #'
 #'  calculate slope of coastline change
@@ -271,11 +322,11 @@ for(i in group_years){
 #'  within predefined search window (4 years difference max)
 #'  
 for(i in group_dates){
-  start <- Sys.time()
+
   for(q in group_pos){
-    # i<-group_dates[group_dates == c("1991-01-01")]
+    # i<-group_dates[group_dates == c("2002-01-01")]
     # 
-    # q <- group_pos[group_pos == 4000]
+    # q <- group_pos[group_pos == 330000]
     # print(q)
     
     subsets_annual <- coastlines[which(coastlines$year_col == i & 
@@ -304,13 +355,17 @@ for(i in group_dates){
 
       # exclude the ones from the original year
       selectDates <- subset(coastlines, coastlines$pos == q &
-                              coastlines$coastDist > -1 & !(coastlines$DATE_ACQUIRED %in% 
-                                                            nonOutliers$DATE_ACQUIRED))$DATE_ACQUIRED
+                              coastlines$coastDist > -1 & 
+                              !(coastlines$DATE_ACQUIRED %in% 
+                                nonOutliers$DATE_ACQUIRED))$DATE_ACQUIRED
       
       # get nearest date (excluding dates outside limit)
       nearestDate <- selectDates[1:length(selectDates) == 
-                                   which.min(replace(abs(as.Date(selectDates) - reference_date), 
-                                                     abs(as.Date(selectDates) - reference_date)>year_limit*356, NA))]
+                                   which.min(replace(abs(as.Date(selectDates) - 
+                                                           reference_date), 
+                                                     abs(as.Date(selectDates) - 
+                                                           reference_date)>year_limit*356, 
+                                                     NA))]
       
       if(length(nearestDate) == 0){break}
       index_nearest <- which(as.Date(as.character(coastlines$DATE_ACQUIRED)) == nearestDate & 
@@ -350,11 +405,7 @@ for(i in group_dates){
     
     
   }
-
-  end <- Sys.time()
-  dif<- difftime(end, start, "mins")
-  print(paste0(as.Date(i) ,' in ', round(dif,1), ' in ', units(dif)))
-
+  
   # remove temp variables
   suppressWarnings(remove(subsets_annual, outliers,nonOutliers, reference_date,
                           maxAttemp, lm.out, slope, m_per_year, selectDates, nearestDate,
@@ -427,8 +478,8 @@ coastlines2$coast_median[coastlines2$coast_outlier == 0] <- NA
 
 # key to indicate groups of years~pos
 coastlines2$key <- with(rle(as.numeric(coastlines2$year_col)), 
-                     rep(seq_along(lengths), 
-                         lengths))
+                        rep(seq_along(lengths), 
+                            lengths))
 
 # # fill outliers (NA) with median coastal observation of that year
 coastlines2 <- coastlines2 %>%
@@ -436,8 +487,9 @@ coastlines2 <- coastlines2 %>%
   dplyr::mutate(coast_median = Mode(coast_median)) %>%
   ungroup() # remove group
 
-# only now there remain some groups with median of NA (because there was only 0 or 1 observations in that group)
-# which is a problem for the next step
+# only now there remain some groups with median of NA 
+#     (because there was only 0 or 1 observations in that group)
+# This is a problem for the next step
 # so fill NA with Mode of LOCF columns
 coastlines2 <- coastlines2 %>%
   dplyr::group_by(key) %>%
@@ -449,16 +501,16 @@ coastlines2 <- coastlines2 %>%
 #'  
 coastlines3 <- coastlines2 %>% 
   dplyr::group_by(pos) %>%           # group_by performs calculation per group
-
+  
   # calculate for each position the difference with previous
   dplyr::mutate(deltaCoast = coast_median - lag(coast_median)) %>%
   dplyr::mutate(deltaCoast = ifelse(is.na(deltaCoast), 0, deltaCoast)) %>%        # NA corresponds to first obs at each transect, set it to 0
-
+  
   # make sure within each group the difference are all assigned the same value (max)
   dplyr::group_by(key) %>%
   dplyr::mutate(deltaCoast = ifelse(sign(deltaCoast[which.max(abs(deltaCoast))]) == 1, # if positive
-                           max((deltaCoast), na.rm = F), # fill with max 
-                           min((deltaCoast), na.rm = F))) %>% # else fill with min (to ensure negative value remains)
+                                    max((deltaCoast), na.rm = F), # fill with max 
+                                    min((deltaCoast), na.rm = F))) %>% # else fill with min (to ensure negative value remains)
   ungroup()
 
 
@@ -466,49 +518,58 @@ if(exportCoasts){
   
   for (year in unique(format(as.Date(uniqueDates), '%Y'))){
     # year <- 1997
-    # print(year)
-    start_year <- as.Date(ISOdate(year, 1, 1))
-    end_year <- as.Date(ISOdate(year, 12, 31)) 
-    
-    coastlines_per_year <-subset(coastlines3,
-                               as.Date(DATE_ACQUIRED) >= start_year &
-                                 as.Date(DATE_ACQUIRED) <= end_year)
-    
-    coastlines_per_year <- coastlines_per_year %>%
-      dplyr::select(!c(x,y)) # drop columns that only deal with mudbank data?
-    
-    write_csv(coastlines_per_year, paste0(wd,"/data/processed/coastlines/", aoi,
-                                        '_', year, '_coastlines.csv'))
-    
-    # https://cran.r-project.org/web/packages/rgee/rgee.pdf
-    #http://5.9.10.113/65768592/converting-gee-script-to-be-used-with-rgee
-    
-    # select properties to include in the export
-    testForExport <- coastlines_per_year %>% 
-      dplyr::select(c(coastX, coastY, pos,DATE_ACQUIRED,coast_outlier,
-                      coastDist)) %>%
-      dplyr::mutate(coastDist = ifelse(is.na(coastDist), -1, coastDist))
-    
-    sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
-    
+    print(year)
 
-    fileN <- paste0(aoi,'_',year,'_coastlines')
-    assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
     
-    task_vect <- ee_table_to_asset(
+    outfile <- paste0("./data/processed/coastlines/", aoi,
+           '_', year, '_coastlines.csv')
+    
+    # if(!file.exists(outfile)){
+      start_year <- as.Date(ISOdate(year, 1, 1))
+      end_year <- as.Date(ISOdate(year, 12, 31)) 
+      
+      coastlines_per_year <-subset(coastlines3,
+                                   as.Date(DATE_ACQUIRED) >= start_year &
+                                     as.Date(DATE_ACQUIRED) <= end_year)
+      
+      coastlines_per_year <- coastlines_per_year %>%
+        dplyr::select(!c(x,y))
+      
+      write_csv(coastlines_per_year, outfile)
+      # select properties to include in the export
+      testForExport <- coastlines_per_year %>%
+        dplyr::select(c(coastX, coastY, pos,DATE_ACQUIRED,coast_outlier,
+                        coastDist)) %>%
+        dplyr::mutate(coastDist = ifelse(is.na(coastDist), -1, coastDist))
+      
+      sf_to_ee <- ee$FeatureCollection(sf_as_ee(testForExport))
+      
+      
+      fileN <- paste0(aoi,'_',year,'_coastlines')
+      assetid <- paste0(ee_get_assethome(), '/',aoi,'_foreshore/',fileN)
+      
+      task_vect <- ee_table_to_asset(
         collection = sf_to_ee,
         description = fileN,
         assetId = assetid,
         overwrite = TRUE
       )
-    task_vect$start()
-    # ee_monitoring(task_vect) 
+      task_vect$start()
+      # ee_monitoring(task_vect)
+      
+      # build function to export directly to GEE asset
+      
+      print( paste0(wd,"/data/processed/coastlines/", aoi,
+                    '_', year, '_coastlines.csv'))
+      remove(coastlines_per_year,sf_to_ee, start_year, end_year,task_vect)
+    # }
     
-    # build function to export directly to GEE asset
+   
     
-    print( paste0(wd,"/data/processed/coastlines/", aoi,
-                  '_', year, '_coastlines.csv'))
-    remove(coastlines_per_year,sf_to_ee, start_year, end_year,task_vect)
+    # https://cran.r-project.org/web/packages/rgee/rgee.pdf
+    #http://5.9.10.113/65768592/converting-gee-script-to-be-used-with-rgee
+    
+    
   }
   
   
@@ -521,37 +582,74 @@ if(exportCoasts){
 #' test simple 2d plot
 #' 
 # 
-# twoD_pos <- 38000
+twoD_pos <- 38000# 70000  # 532000
 
-# subset2d_for_testPlot <- subset(coastlines3, pos == twoD_pos)
-# 
-# plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
-#      xlab="DATE_ACQUIRED", ylab="coastDist [m]",
-#      main = paste0('coastline position: ',twoD_pos, ' [m]'), pch = 20)
-# lines(unique(as.Date(subset2d_for_testPlot$year_col))+180,
-#       aggregate(subset2d_for_testPlot$coast_median, list(subset2d_for_testPlot$key), median)$x,
-#       col = 'black', lty = 2)
-# points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
-#        subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
-#        col = 'red',  pch = 20)
-# points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$DATE_ACQUIRED),
-#        subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$locf, col = 'blue')
-# legend("right", legend=c("Observations", "median values", 'outliers', 'locf'),
-#        col=c("black", "black", 'red', 'blue'), pch = c(20,NA,20,20) ,lty = c(0,2,0,0), cex=0.8)
-# 
+subset2d_for_testPlot <- subset(coastlines3, pos == twoD_pos) #  & coastDist < 6000
+
+plot(as.Date(subset2d_for_testPlot$DATE_ACQUIRED), subset2d_for_testPlot$coastDist,
+     xlab="DATE_ACQUIRED", ylab="coastDist [m]",
+     main = paste0('coastline position: ',twoD_pos, ' [m]'), pch = 20)
+lines(unique(as.Date(subset2d_for_testPlot$year_col))+180,
+      aggregate(subset2d_for_testPlot$coast_median, list(subset2d_for_testPlot$key), median)$x,
+      col = 'black', lty = 2)
+points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$DATE_ACQUIRED),
+       subset2d_for_testPlot[subset2d_for_testPlot$coast_outlier == 0, ]$coastDist,
+       col = 'red',  pch = 20)
+points(as.Date(subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$DATE_ACQUIRED),
+       subset2d_for_testPlot[subset2d_for_testPlot$coastX == -1, ]$locf, col = 'blue')
+legend("right", legend=c("Observations", "median values", 'outliers', 'locf'),
+       col=c("black", "black", 'red', 'blue'), pch = c(20,NA,20,20) ,lty = c(0,2,0,0), cex=0.8)
+
+
+
+##########
+pol <- ee$Geometry$Polygon(
+  coords = list(
+    c(-56.856912, 5.836168),
+    c(-56.821485, 6.120976),
+    c(-54.262531, 6.009777),
+    c(-54.255509, 5.772303)
+  ),
+  proj = "EPSG:4326",
+  geodesic = FALSE
+)
+
+# for testing / visualization define an imageCollection
+collectionL4 <- ee$ImageCollection("LANDSAT/LT04/C01/T1_TOA")
+# filterBounds(pol)
+
+collectionL5 <- ee$ImageCollection("LANDSAT/LT05/C01/T1_TOA")
+# filterBounds(pol)
+
+collectionL7 <- ee$ImageCollection("LANDSAT/LE07/C01/T1_TOA")
+# filterBounds(pol)
+
+collectionL8 <- ee$ImageCollection("LANDSAT/LC08/C01/T1_TOA")
+# filterBounds(pol)
+
+collection <- collectionL8$merge(collectionL5)$merge(collectionL7)$
+  merge(collectionL4)
+
+vizParams = list(
+  bands = c("B5", "B4", "B3"),
+  min = 0.05, max = 0.5, gamma = 1.4
+)
+
+
 coast_spatial <- sp_pnt_ee(subset2d_for_testPlot$coastX,
-                              subset2d_for_testPlot$coastY, paste0('pos: ',twoD_pos),
-                              "#d95f0e")
+                           subset2d_for_testPlot$coastY, paste0('pos: ',twoD_pos),
+                           "#d95f0e")
 
 pnt <- ee$Geometry$Point(c(median(subset2d_for_testPlot$originX), median(subset2d_for_testPlot$originY)))
 
 filtCollect <- collection$filterBounds(pnt)$
   filterDate(as.character(as.Date(min(subset2d_for_testPlot$DATE_ACQUIRED))-1),
              as.character(as.Date(max(subset2d_for_testPlot$DATE_ACQUIRED))+1))$
-  sort("CLOUDCOVER", TRUE)
+  # sort("CLOUDCOVER", TRUE)$
+  sort('DATE_ACQUIRED', F)
 dates <- ee_get_date_ic(filtCollect, time_end = FALSE)
 
-acquisition <- ee_get_date_img(filtCollect$first())$time_start
+acquisition <- ee_get_date_img(filtCollect$sort('DATE_ACQUIRED', F)$first())$time_start
 
 Map$centerObject(filtCollect$first())
 first <- Map$addLayer(filtCollect$first(), vizParams, paste0('landsat: ', format(as.Date(acquisition), '%Y-%m-%d')))

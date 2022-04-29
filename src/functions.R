@@ -43,11 +43,8 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   #' @param patternY is the pattern describing column of Y-coordinate
   
   # csv <- allFiles
-  
-  # patternX <- 'peakCoordX'
-  # patternY <- 'peakCoordY'
-  # cols_to_keep <- c('axisDist', 'mudFract', 'endDrop', 'coastDist',
-  #                   'originX', 'originY', '.geo')
+  # patternX <- 'coastX'
+  # patternY <- 'coastY'
   # cols_to_keep <- keep_columns
   
   dates <- col_of_interest(csv, 'DATE_ACQUIRED$')
@@ -72,19 +69,6 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
   for (n in 1:length(uniqueX)){
     # n<-5
     
-    # Coordinates of transects
-    # coords <- qdapRegex::ex_between(as.character(geo[n]), ":[", "]}")[[1]]
-    # all_digits <- regmatches(coords, gregexpr("[-[:digit:].]+", coords))[[1]]
-    # 
-    # begin_coords <- data.frame(lon = as.numeric(all_digits[1]), #x
-    #                            lat = as.numeric(all_digits[2])) #y
-    # 
-    # end_coords <- data.frame(lon = as.numeric(all_digits[3]),
-    #                          lat = as.numeric(all_digits[4]))  
-    # x <- as.matrix(rbind(begin_coords, end_coords))
-
-    # only return observations if patternX >= 0 and if coordinates
-    
     test1transect <- subset(csv,csv[,col_of_interest(csv, 'originX$')] 
                             == uniqueX[n])
     # will this X > 0 remove missed observations of coastlines of pattern x. 
@@ -102,11 +86,11 @@ reshape_csvPoints <- function(csv, patternX, patternY, cols_to_keep){
     classes <- lapply(csv, class) #%in% cols_to_keep
 
     for (ckeep in cols_to_keep){
-      # ckeep<- cols_to_keep[3]
+      # ckeep<- cols_to_keep[12]
       # print(ckeep)
       classToUse <- paste(classes[ckeep], collapse = ',')
       
-      vals = test1transect[,col_of_interest(csv, ckeep)]
+      vals = test1transect[,col_of_interest(csv, paste0(ckeep,'$'))]
       class(vals) <- classToUse
       df_out[,paste0(ckeep)] <- vals
     }
@@ -539,7 +523,7 @@ get_dists2 <- function(x, lon, lat, bearing, dist){
     # i<-1
     
     pattern <- dist[i]
-    coords_out <- data.frame(destPoint(dat,  bearing, x[[paste0(pattern)]]))
+    coords_out <- data.frame(geosphere::destPoint(dat,  bearing, x[[paste0(pattern)]]))
     
     negDist <- which( x[[paste0(pattern)]] == -1)
     
@@ -687,5 +671,209 @@ n_fun <- function(x){
                     label = paste0(length(x))))
 }
 
+getGradient = function(arr){
+  
+  #' @title Get gradient
+  #' @description compute gradient according to: 
+  #' https://www.delftstack.com/howto/numpy/curvature-formula-numpy/
+  #' 
+  #' @param arrayX array vector with values 
+  #' @return vector with gradient between points
+  
+  # arr <- arrayY
 
+    left = c(0,arr[1:(length(arr)-1)])
+    right =  c(arr[2:length(arr)],0)
+    
+    left0 = arr[1]-(right[1]-arr[1])
+    rightMin1 = arr[length(arr)]+(arr[length(arr)]-left[length(left)])
+    
+    # // replace vallues
+    left = c(left0, left[2:length(left)])
+    right = c(right[1:(length(right)-1)], rightMin1)    
+    
+    dif1 = arr-left;
+    dif2 = right-arr;
+    
+    gradient = (dif1+dif2)/2;
+    
+    
+  return(gradient)
+};
+
+getCurvature = function(arrayX, arrayY){
+  
+  #' @title Get Curvature
+  #' @description compute radius of curvature according to: 
+  #' https://www.delftstack.com/howto/numpy/curvature-formula-numpy/
+  #' 
+  #' @param arrayX array vector x coordinates
+  #' @param arrayY array vector Y coordinates
+  #' @return vector with cruvature
+  
+  # arrayY <- numericY #testY
+  # arrayX <- numericX #testX
+  y_t <-  getGradient(arrayY)
+  x_t <-  getGradient(arrayX)
+  xx_t <- getGradient(x_t)
+  yy_t <- getGradient(y_t)
+  
+  upperCurv = (xx_t*y_t)-(x_t*yy_t) #abs((xx_t*y_t)-(x_t*yy_t)) # abs removes all negative values (distinction concavity / convexity?)
+  lowerCurv = ((x_t*x_t)+(y_t*y_t))^1.5
+  
+  return(upperCurv/lowerCurv)
+  
+  
+}
+
+# https://stackoverflow.com/questions/40040834/replace-na-with-previous-or-next-value-by-group-using-dplyr
+fill_NA <- function(x) {
+  which.na <- c(which(!is.na(x)), length(x) + 1)
+  values <- na.omit(x)
+  
+  if (which.na[1] != 1) {
+    which.na <- c(1, which.na)
+    values <- c(values[1], values)
+  }
+  
+  diffs <- diff(which.na)
+  return(rep(values, times = diffs))
+}
+
+# determine destination Point
+func_destP <- function(x,y,bear,dist){
+  coords <- geosphere::destPoint(SpatialPoints(data.frame(x = x, y = y),
+                                    CRS("+proj=longlat +datum=WGS84")),
+                      bear, dist)
+  
+  return(coords)
+}
+
+first_last_dir <- function(xy){
+  # xy<-smoothed
+  pnt1 <-SpatialPoints(data.frame(x = xy[1,1], y =xy[1,2]),
+                       CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs +datum=WGS84")))
+  lastPnt <-SpatialPoints(data.frame(x = xy[nrow(xy),1], y =xy[nrow(xy),2]),
+                          CRS(as.character("+proj=utm +zone=21 +ellps=intl +towgs84=-265,120,-358,0,0,0,0 +units=m +no_defs +datum=WGS84")))
+  
+  
+  return (geosphere::bearing(spTransform(pnt1, CRS("+init=epsg:4326 +datum=WGS84")),
+                             spTransform(lastPnt, CRS("+init=epsg:4326 +datum=WGS84"))))
+}
+
+lineLinegth <- function(x,y){
+  dx <- c(0, diff(x)) # Calculate difference at each cell comapred to next line segment
+  dy <- c(0, diff(y))
+  
+  dseg <- sqrt(dx^2+dy^2)
+  dtotal <- cumsum(dseg)                 
+  return(sum(dseg))
+}
+
+geodesicLine <- function(L){
+  pt <- as(L, "SpatialPointsDataFrame")
+  start <- pt[1,]
+  end <- pt[nrow(pt),]
+  
+  # straight line distance [m]
+  return(max(rgeos::gDistance(pt[c(2:length(pt)),],start, byid = T)))
+}
+
+
+charToVecArray <- function(charArray, split){
+  vec <- gsub('[\\x5B\\x5D]+', '', charArray, perl = T)
+  
+  
+  return(list(as.numeric(unlist(strsplit(vec, split))))) 
+}
+
+bearingToOrientation = function(b){
+  # now compute the orientation of the coastline, centered around north 
+  # scale to 0- 360
+  centeredB = ifelse(b < 0, b + 360,b)
+  
+  # now go from bearing to orientation (facing side)
+  # by adding 90 degrees
+  O <- ifelse(centeredB + 90 > 360,
+              (centeredB + 90) - 360,
+              centeredB + 90)
+  
+  # re-center coastline orientation around north
+  # range is -180 - 0 - 180
+  centeredO <- ifelse(O > 180,
+                      O - 360,
+                      O)
+  return(centeredO)
+}
+
+
+# https://stackoverflow.com/questions/11406189/determine-if-angle-lies-between-2-other-angles
+is_angle_between <- function(target, angle1, angle2){
+  #   // make the angle from angle1 to angle2 to be <= 180 degrees
+  rAngle = ((angle2 - angle1) %% 360 + 360) %% 360
+  if (rAngle >= 180) {
+    
+    angle1 <- angle1 + angle2
+    angle2 <- angle1 - angle2
+    angle1 <- angle1 - angle2
+    # swap(angle1, angle2)
+  }
+  
+  #check if it passes through zero
+  if (angle1 <= angle2){
+    out = target >= angle1 && target <= angle2}
+  else {
+    out = target >= angle1 || target <= angle2}
+  return(out)
+  
+}
+
+
+
+sequenceOverlap <- function(startX, endX, startY, endY){
+  
+  if(is.na(startX) | is.na(startY)){
+    return(0)
+  }
+  seq1 <- seq(startX, endX,1000)
+  seq2 <- seq(startY, endY,1000)
+  return(sum(seq1 %in% seq2, na.rm = TRUE))
+}
+
+# ++++++++++++++++++++++++++++
+# flattenCorrMatrix
+# ++++++++++++++++++++++++++++
+# cormat : matrix of the correlation coefficients
+# pmat : matrix of the correlation p-values
+# http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+
+
+matrify = function(data){
+  if (ncol(data) != 3)
+    stop("data frame must have three column format")
+  plt <- data[, 1]
+  spc <- data[, 2]
+  abu <- data[, 3]
+  plt.codes <- levels(factor(plt))
+  spc.codes <- levels(factor(spc))
+  taxa <- matrix(0, nrow = length(plt.codes), ncol = length(spc.codes))
+  row <- match(plt, plt.codes)
+  col <- match(spc, spc.codes)
+  for (i in 1:length(abu)) {
+    taxa[row[i], col[i]] = taxa[row[i], col[i]] + abu[i] # here is the diff with matrify
+  }
+  taxa <- data.frame(taxa)
+  names(taxa) <- spc.codes
+  row.names(taxa) <- plt.codes
+  taxa
+}
 
