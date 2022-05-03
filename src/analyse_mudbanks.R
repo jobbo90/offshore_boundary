@@ -688,6 +688,30 @@ for (cntr in countries){
   }
 }
 
+rectangles <- rectangles %>%
+  rowwise() %>%
+  dplyr::mutate(LWratio = lengthMudbank/mudbankMeanWidth)
+
+# write_csv(rectangles, paste0(wd,"/data/processed/mudbanks/mudbanks.csv"))
+annualStats <- rectangles %>%
+  dplyr::group_by(Country, id) %>%  # group per year & country
+  dplyr::mutate(meanArea = mean(area, na.rm = T),
+                meanLength = mean(lengthMudbank, na.rm = T),
+                meanMudbankCount = mean(nrMudbanks, na.rm = T),
+                mudbankMeanWidth = mean(mudbankMeanWidth, na.rm = T),
+                meanLWratio =mean(LWratio, na.rm = T) 
+  ) %>%
+  
+  dplyr::summarize(meanSpeed = mean(migrationSpeed, na.rm = T),
+                   maxSpeed = max(migrationSpeed, na.rm = T),
+                   sdSpeed = sd(migrationSpeed, na.rm = T),
+                   meanSpeed = mean(migrationSpeed, na.rm = T),
+                   meanArea = meanArea[1],
+                   meanLength = meanLength[1],
+                   meanMudbankCount = meanMudbankCount[1],
+                   mudbankMeanWidth = mudbankMeanWidth[1],
+                   meanLWratio = meanLWratio[1]
+  )
 #################################
 #'   
 #'   Figure 4: annual coastline changes
@@ -846,30 +870,6 @@ annual_coastlineC
 rectangles <- transform(rectangles,
                         Country=factor(Country, levels=c("FrenchGuiana","Suriname","Guyana")))
 
-rectangles <- rectangles %>%
-  rowwise() %>%
-  dplyr::mutate(LWratio = lengthMudbank/mudbankMeanWidth)
-
-# write_csv(rectangles, paste0(wd,"/data/processed/mudbanks/mudbanks.csv"))
-annualStats <- rectangles %>%
-  dplyr::group_by(Country, id) %>%  # group per year & country
-  dplyr::mutate(meanArea = mean(area, na.rm = T),
-                meanLength = mean(lengthMudbank, na.rm = T),
-                meanMudbankCount = mean(nrMudbanks, na.rm = T),
-                mudbankMeanWidth = mean(mudbankMeanWidth, na.rm = T),
-                meanLWratio =mean(LWratio, na.rm = T) 
-  ) %>%
-
-  dplyr::summarize(meanSpeed = mean(migrationSpeed, na.rm = T),
-                   maxSpeed = max(migrationSpeed, na.rm = T),
-                   sdSpeed = sd(migrationSpeed, na.rm = T),
-                   meanSpeed = mean(migrationSpeed, na.rm = T),
-                   meanArea = meanArea[1],
-                   meanLength = meanLength[1],
-                   meanMudbankCount = meanMudbankCount[1],
-                   mudbankMeanWidth = mudbankMeanWidth[1],
-                   meanLWratio = meanLWratio[1]
-  )
 
 statToPlot <- 'lengthMudbank'#'lengthMudbank' / 'mudbankFract' / 'nrMudbanks' / 'transectFract'
 # 'mudbankMaxWidth' / 'mudbankMeanWidth' / 'mudbankMedianWidth' / 'migrationSpeed' / 'speedMeanPos' / 'LWratio' / 'area'
@@ -925,7 +925,7 @@ mudbankStats
 ##'
 ##' 
 
-speedToPlot <- 'migrationSpeed' 
+speedToPlot <- 'speedMeanPos' 
 # speedMeanPos / migrationSpeed / mudbankMeanWidth / area / mudbankFract / mudbankMedianWidth
 
 migrationStats <- rectangles %>%
@@ -1013,6 +1013,8 @@ rectangles_reformatPos <- rectangles %>%
                               xmax)) %>%
   dplyr::filter(xmin > -1)
 
+scaleFUN <- function(x) sprintf("%.1f", x/1000)
+
 pSpeed <-ggplot(rectangles_reformatPos, #& !(pos %in% posToExclude)),
                 aes(x = xmin, y = as.Date(id))) + 
   
@@ -1031,12 +1033,16 @@ pSpeed <-ggplot(rectangles_reformatPos, #& !(pos %in% posToExclude)),
                 fill =  eval(as.name(paste(speedToPlot)))/1000), # 
             size = 0.8) +
   facet_wrap(~Country, ncol = 1, nrow = 3) +
-  labs(x =  'Alongshore position [km]', y = "Year") +
+  labs(x =  'Alongshore position: West - East [km]', y = "Year") +
   scale_fill_gradientn(
     # name = 'migration \n [km/yr] \n',
-    name = 'median \n extent [km] \n',
+    name = 'migration speed\n [km/yr] \n',
     # name = 'area mudbank \n extent [km2] \n',
     colours = c( "#4575b4",'#ffffbf','#d73027' )) +
+  scale_x_continuous(expand = c(0,0), labels = scales::unit_format(
+    scale = 0.001,
+    unit = " ",
+    accuracy = 1))+
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
         axis.line.y = element_line(size = 0.5, colour = "black"),
         axis.line = element_line(size= 1, colour = "black"),

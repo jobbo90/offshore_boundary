@@ -49,7 +49,7 @@ source("./src/functions.R")
 # mapviewOptions(basemaps = c( "Esri.WorldImagery","Esri.WorldShadedRelief", "OpenStreetMap.DE"))
 dataFolder <- './data/processed'
 aoi <- c('FrenchGuiana', 'Suriname', 'Guyana')  #'FrenchGuiana', 'Suriname', 'Guyana'
-years <- seq(from = 1985, to = 2020, by = 1)
+years <- seq(from = 1985, to = 2021, by = 1)
 
 outputName <- ifelse(length(aoi) > 1, 
                      'Guianas', aoi)
@@ -175,48 +175,38 @@ allFiles_dropPOS <- allFiles %>%
   filter(toFilter == 0) %>%
   dplyr::select(-c(toFilter))
 
-group_dates<-unique(allFiles_dropPOS$year_col)
-group_pos <- unique(allFiles_dropPOS$pos)
-
 # # get for all transects an coastline observation near
 ## reference date as baseline
 allFiles_dropPOS$baseline <- 0
 allFiles_dropPOS$baseline2 <- 0
 
 
-
+# normalize coastline changes to reference date (2x)
 allFiles_refDate <- allFiles_dropPOS %>%
   # dplyr::mutate(nonOutlier = ifelse(coast_outlier == 1 & coastDist > 0 & 
   #                                     !(is.na(coastDist)), 1, 0)) %>%
-  dplyr::group_by(Country, pos) %>%  # , nonOutlier
+  dplyr::group_by(Country, pos) %>%  #, nonOutlier
   
   # nearestDate
   dplyr::mutate(nearestDate =  as.Date(year_col[
     which.min(abs(as.Date(year_col)-reference_date))])) %>%
   
   # corresponding coastDist and coast median values assigned as baseline
-  # dplyr::mutate(baseline =  coastDist[which.min(abs(as.Date(year_col)-reference_date))]) %>%
-  dplyr::mutate(baseline2 =  coast_median[which.min(abs(as.Date(year_col)-reference_date))]) %>%
-  
-  # overwrite for entire group (country, pos) the baseline values
-  dplyr::group_by(Country, pos) %>%
-  # dplyr::mutate(
-  #   nearestDate = ifelse(nonOutlier == 0, NA, nearestDate),
-  #   baseline2 = ifelse(nonOutlier == 0, NA, baseline2),
-  #   baseline = ifelse(nonOutlier == 0, NA, baseline)) %>%
+  dplyr::mutate(baseline =  coast_median[which.min(abs(as.Date(year_col)-reference_date))]) %>%
+  dplyr::mutate(baseline2 =  coast_median[which.min(abs(as.Date(year_col)-normalize_date))]) %>%
   
   #overWrite NA values with most occuring group value
   dplyr::mutate(
     nearestDate = na.aggregate(nearestDate, FUN=Mode),
     baseline = na.aggregate(baseline, FUN=Mode),
     baseline2 = na.aggregate(baseline2, FUN=Mode)) %>%
-  # remaining NA values are posToExclude (rivermouths, there is no median computed
-  
-  dplyr::group_by(Country, pos,year_col) %>%
-  
-  # subtract median from value in nearest date to normalize
-  dplyr::mutate(
-    normalized2 = coast_median - baseline2)
+  # remaining NA values are posToExclude (rivermouths, there is no median computed)
+  # unique ID for each combination of ID and Pos  
+  dplyr::mutate(countryPos = paste0(Country,pos),
+                normalized = coast_median - baseline,
+                normalized2 = coast_median - baseline2) %>%
+  ungroup()
+
   
 
 #################################
@@ -225,7 +215,8 @@ allFiles_refDate <- allFiles_dropPOS %>%
 #' 
 #################################
 twoD_pos <- 29000
-subset2d_for_testPlot <- subset(allFiles_refDate, pos == twoD_pos) 
+subset2d_for_testPlot <- subset(allFiles_refDate, pos == twoD_pos & 
+                                  Country == 'Suriname') 
 
 
 # plot temporal evolution for given transect
@@ -284,7 +275,8 @@ allFiles_mutate <- allFiles_refDate %>%
 
 countryOI <- aoi[1]# c('Suriname')
 grouping <- c('Country')
-propertyToPlot <- c('meanCurvature_250')  # 'meanCurvature_250' 'sinuositySmoothed_100'
+propertyToPlot <- c('centeredOrientation_250')  # 'meanCurvature_250' 'sinuositySmoothed_100', 'centeredOrientation_100', 'centeredOrientation2_100'
+colnames(allFiles_mutate)
 
 # hist(allFiles_mutate$sinuositySmoothed_100)
 
@@ -309,7 +301,7 @@ variability <- ggplot(data = allFiles_mutate, #%>% filter(Country == countryOI),
                       alpha = 1,
        aes(x=eval(as.name(paste(propertyToPlot))), 
            fill = eval(as.name(paste(grouping))))) +
-  facet_wrap(~paste0(grouping), ncol = 1, nrow = nrow(meansOI)) +
+  facet_wrap(~Country, ncol = 1, nrow = nrow(meansOI)) +
   scale_y_log10(expand = c(0,0), name = 'log(obs. count)')+
   # geom_vline(data = meansOI, aes(xintercept= mean), size = 3.5, colour = 'black',
              # linetype="solid") +
@@ -496,6 +488,7 @@ variability
 #                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
+#Hovmoller plot for the spatio temporal distribytion of coastline property
 p <-ggplot(allfiles_long %>% 
              filter(transectBuffer == 250), 
            aes(x =pos,y = as.Date(year_col), fill=value)) + 
@@ -903,22 +896,10 @@ combined <- dens1 +legend + plotTempVar + dens2 +
         # plot.tag.position = c(0, 1),
         plot.tag = element_text(size = 12, hjust = 0, vjust = 0, face = "bold")) 
 
-# row1 <- plot_grid(dens1, legend, ncol = 2, align = 'h', 
-#           nrow = 1,
-#           labels = c('A', ''))
-# row2 <- plot_grid(plotTempVar, dens2, ncol = 2, align = 'h', 
-#                   nrow = 1, labels = c('C', 'D'))
-# 
-# plot_grid(row1, row2,
-#           ncol = 1, align = 'h', 
-#           nrow = 2          # adjust lay out 
-#           ) 
-
-
-ggsave(combined, filename = paste0("./results/temp_maps/",
-                                             'variabilityOrientation_Guianas_1985-2020',
-                                             '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-       width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# ggsave(combined, filename = paste0("./results/temp_maps/",
+#                                              'variabilityOrientation_Guianas_1985-2020',
+#                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # Alternative to the boxplots: create groups of pos (e.g. every 10 or per region)
 # and compute their average shore-normal angle for the x-axis and the distribution of
@@ -1004,10 +985,18 @@ ggsave(combined, filename = paste0("./results/temp_maps/",
 ##' 
 ##' 
 
-
 allFiles_posMudbank <- allFiles_mutate %>%
   filter(alongshore != 'NA') %>%
   dplyr::group_by(Country, pos) %>%
+  dplyr::mutate(
+    firstCoastline = coast_median[
+      which.min(abs(as.Date(year_col)-as.Date("1986-01-01")))],
+    lastCoastline = coast_median[
+      which.min(abs(as.Date(year_col)-as.Date("2021-01-01")))],
+    endPointDiff = lastCoastline - firstCoastline
+  ) %>%
+  
+  
   dplyr::mutate(
     # amount of years there is between first and last observations at each transect
     yrs = length(year(max(as.Date(year_col))):year(min(as.Date(year_col)))), # incl. end
@@ -1016,6 +1005,11 @@ allFiles_posMudbank <- allFiles_mutate %>%
     # Amount of years mudbank & no mudbank
     mudbankYRS = sum(noMudbank == 0, na.rm = T),
     noMudbankYRS = sum(noMudbank == 1, na.rm = T),
+    
+    # startPos & endPos
+    startPos = normalized2[which.min(as.Date(year_col))],
+    endPos = normalized2[year(max(as.Date(year_col)))],
+    freqOcc = mudbankYRS/(yrs-noDataYRS), # amount of mudbanks in the years there is data
     
     meanCurve = mean(medianC_250,na.rm = T),
     meanOrient = mean(centeredOrientation2_250,na.rm = T),
@@ -1029,13 +1023,16 @@ allFiles_posMudbank <- allFiles_mutate %>%
   # don't change these two! 
   dplyr::group_by(Country, pos, noMudbank) %>%
   dplyr::summarize(
+    endPointDiff = endPointDiff[1],
     sum_deltaCoast = sum(mean_deltaCoast, na.rm = T),
     alongshore =  alongshore[1],
     yrs =  yrs[1],
+    firstCoastline = firstCoastline[1],
+    lastCoastline = lastCoastline[1],
     noDataYRS = noDataYRS[1],
     mudbankYRS = mudbankYRS[1],
     noMudbankYRS = noMudbankYRS[1],
-    
+    freqOcc = freqOcc[1],
     meanCurve = meanCurve[1],concavity = concavity[1], 
     meanOrient = meanOrient[1]
     ) %>%
@@ -1052,7 +1049,9 @@ allFiles_posMudbank <- allFiles_mutate %>%
   dplyr::mutate(
     # divide by the amount of years a mudbank is observed or not (instead of total years)
     withMudbank_myr = withMudbank/mudbankYRS,  # yrs,#
-    withoutMudbank_myr = withoutMudbank/noMudbankYRS) %>% # yrs)%>% #
+    withoutMudbank_myr = withoutMudbank/noMudbankYRS,
+    netChange_myr = withMudbank_myr + withoutMudbank_myr,
+    endpointRate = endPointDiff/yrs) %>% # yrs)%>% #
   dplyr::mutate(orientClass = ifelse(meanOrient<22.5 & meanOrient > -22.5,
                                      'N', 'other'),
                 orientClass = ifelse(meanOrient<67.5 & meanOrient > 22.5,
@@ -1061,60 +1060,136 @@ allFiles_posMudbank <- allFiles_mutate %>%
                                      'E', orientClass))
 
 allFiles_posMudbank <- transform(allFiles_posMudbank,
-                     Country=factor(Country, levels=c("FrenchGuiana","Suriname","Guyana")))
+                                 Country=factor(Country, levels=c("FrenchGuiana","Suriname","Guyana")))
 
+coastlineChanges <- allFiles_posMudbank %>% 
+  # dplyr::group_by(stability) %>% 
+  dplyr::group_by(Country) %>% 
+  dplyr::summarize(
+    groupSize =  n(), 
+    freqOcc = mean(freqOcc, na.rm = T),
+    withMudbank_myr = mean(withMudbank_myr, na.rm = T),
+    withoutMudbank_myr = mean(withoutMudbank_myr, na.rm = T),
+    netChange_myr =mean(netChange_myr, na.rm = T),
+    endpointRate = mean(endpointRate, na.rm = T)) %>%
+  ungroup()
+
+# not all end-point rate values are equal to the net change myr approach (outliers are more prominent due to summing of values)
+plot(allFiles_posMudbank$netChange_myr, allFiles_posMudbank$endpointRate)
+
+histCoastalChange <-
+  ggplot(data = allFiles_posMudbank,
+         aes(x=endpointRate, fill = Country) ) +
+  # geom_bar(position="stack", stat="identity")
+  geom_histogram( binwidth = 25, alpha = 1, position = 'stack') +
+  # scale_x_continuous(limits=c(-1500, 500), breaks = c(-200, 0, 200)) +
+  scale_y_continuous(expand = c(0,0)) +
+  # scale_y_log10(name = 'log(obs. count)')+
+
+  geom_vline(data = coastlineChanges, aes(xintercept= endpointRate), size = 1,
+             colour = 'black', linetype="solid") +
+  # geom_vline(data = coastlineChanges, aes(xintercept= mean), size = 1,
+  #            linetype="solid") +
+  facet_wrap(~Country) +
+  labs(y = 'Observations [n]', x = 'Coastline change [m/yr]') +
+
+  theme(
+    axis.line.x = element_line(size = 0.5, colour = "black"),
+    axis.line.y = element_line(size = 0.5, colour = "black"),
+    axis.line = element_line(size=1, colour = "black"),
+    axis.text.x = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
+    axis.text.y = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
+    axis.title.y = element_text(size = 20, face = 'bold'),
+    axis.title.x = element_text(size = 20, face = 'bold'),
+
+    legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+    legend.key = element_rect(fill = NA),
+    legend.text = element_text(size = 25),#element_blank(),
+    legend.title =  element_blank(),
+    # legend.position = c(.8, .4),
+
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    panel.spacing.x = unit(2, 'lines'),
+    strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
+    strip.text.x = element_blank(), # Facet titles
+    plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+
+
+histCoastalChange
+
+# ggsave(resilience, filename = paste0("./results/temp_maps/", outputName,
+#                             '_endPointRateChanges','_',
+#                             format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # count per region the amount of stable and unstable positions
 allFiles_sumChanges <- allFiles_posMudbank %>%
   filter(alongshore != 'NA') %>%
 
-  dplyr::mutate(sumChanges = withMudbank_myr + withoutMudbank_myr) %>%
+  dplyr::mutate(sumChanges = withMudbank_myr + withoutMudbank_myr
+                ) %>%
   dplyr::group_by(Country) %>%
   dplyr::mutate(
     groupSize = n(),
-    stability = ifelse(sumChanges > 0, 'stable', 'unstable'),
+    # endpointRate = mean(endpointRate,na.rm=T),
+    # stability = ifelse(sumChanges > 0, 'stable', 'unstable'),
+    # stability2 = ifelse(endpointRate > 0, 'stable', 'unstable'),
     convex = sum(concavity == 'convex', na.rm = T),
     concave = sum(concavity == 'concave', na.rm = T),
     withMudbank_myr = sum(sumChanges >= 0, na.rm = T),
-    withoutMudbank_myr = sum(sumChanges < 0, na.rm = T)) %>%
+    withoutMudbank_myr = sum(sumChanges < 0, na.rm = T),
+    endpointRateStable = sum(endpointRate >= 0 ,na.rm=T),
+    endpointRateUnstable = sum(endpointRate < 0 ,na.rm=T)
+    ) %>%
   # percentage stable <> unstable
   dplyr::mutate(withMudbank_myr = withMudbank_myr[1]/groupSize*100,
                    withoutMudbank_myr = withoutMudbank_myr[1]/groupSize*100,
+                stable = endpointRateStable[1]/groupSize*100,
+                unstable = endpointRateUnstable[1]/groupSize*100,
                    )
 
 stableGroup <- allFiles_sumChanges %>% 
   # dplyr::group_by(stability) %>% 
   dplyr::group_by(Country) %>% 
   dplyr::summarize(
+    endpointRate = mean(endpointRate,na.rm=T),
     groupSize =  n(), 
     concavity = concavity[1],
     withMudbank_myr = withMudbank_myr[1],
-    withoutMudbank_myr = withoutMudbank_myr[1])
-
+    withoutMudbank_myr = withoutMudbank_myr[1],
+    stable = stable[1],
+    unstable = unstable[1])
 
 # consider adding a group for plotting a fourth 
 # facet wrap with explanation of zones in graph
 resilience <- ggplot(allFiles_posMudbank 
                      ,aes(x=withMudbank_myr, y= withoutMudbank_myr ,
-                       colour=Country,
-                       shape=withMudbank_myr + withoutMudbank_myr < 0))+ 
+                       colour=endpointRate <0,
+                       ))+ # shape= endpointRate <0
+                         # shape= withMudbank_myr + withoutMudbank_myr < 0))+
   geom_point(alpha = 0.8) + 
   geom_abline(intercept = 1, slope = -1) +
   facet_wrap(~Country) +
   geom_text(data = stableGroup #%>% filter(orientClass!='other') ,
-            ,aes(label=sprintf("prograding: %i%%", round(withMudbank_myr)),
+            ,aes(label=sprintf("prograding: %i%%", round(stable)),
                 x = c(-100), y=c(140)),
             colour = 'Black', angle =-64, size =7) + #
   geom_text(data = stableGroup #%>% filter(orientClass!='other'),
-            ,aes(label=sprintf("retrograding: %i%%", round(withoutMudbank_myr)),
+            ,aes(label=sprintf("retrograding: %i%%", round(unstable)),
                 x = 120, y=-140),
             colour = 'Black', angle =-64, size = 7) +
 
   scale_y_continuous(limits = c(-200, 200)) +
   scale_x_continuous(limits = c(-200, 200)) +
-  scale_shape_manual(name = "",
+  # scale_shape_manual(name = "",
+  #                    labels = c("prograding", "retrograding", ''),
+  #                    values = c(16, 17)) +
+  scale_color_manual(name = "",
                      labels = c("prograding", "retrograding", ''),
-                     values = c(16, 17)) +
+                     values = c('#018571', '#a6611a')) +
   
   labs(y="Without mudbank [m/yr]", x = "With mudbank [m/yr]") + 
   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
@@ -1138,7 +1213,7 @@ resilience
 # ggsave(resilience, filename = paste0("./results/temp_maps/", outputName,
 #                             '_resilience_meanOrient_mudbanks','_',
 #                             format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-# width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+#         width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 
 #################################
@@ -1148,19 +1223,19 @@ resilience
 #'
 
 # region <- c('cayenne')
-Cntry <- c('Guyana')
+Cntry <- c('Suriname') # Guyana / Suriname / FrenchGuiana
 
 toPlotSpatial <- allFiles_posMudbank %>%
-  filter(Country == Cntry) %>%
-  dplyr::mutate(sign = as.factor(sign(withMudbank_myr + withoutMudbank_myr)))
+  filter(Country == Cntry) #%>%
+  # dplyr::mutate(sign = as.factor(sign(withMudbank_myr + withoutMudbank_myr)))
 
 spatialVariability <- ggplot(toPlotSpatial, 
-                             aes(x=pos/1000, y= withMudbank_myr + withoutMudbank_myr, 
+                             aes(x=pos/1000, y=endpointRate #withMudbank_myr + withoutMudbank_myr, 
                              )) +
   geom_hline(yintercept = 0) +
   geom_linerange(data = toPlotSpatial, 
-                 aes(ymin = 0, ymax = withMudbank_myr+ withoutMudbank_myr, 
-                     colour = ifelse(withMudbank_myr + withoutMudbank_myr <0, 
+                 aes(ymin = 0, ymax = endpointRate, #withMudbank_myr+ withoutMudbank_myr, 
+                     colour = ifelse(endpointRate <0, #withMudbank_myr + withoutMudbank_myr <0, 
                                      "blue", "red")),
                  stat = "identity",
                  position = "identity",size=2) + 
@@ -1190,12 +1265,10 @@ spatialVariability <- ggplot(toPlotSpatial,
 
 spatialVariability
 
-# 
-# ggsave(spatialVariability, filename = paste0("./results/temp_maps/", Cntry,'spatialVariability',
+# ggsave(spatialVariability, filename = paste0("./results/temp_maps/", Cntry,'spatialVariability_endpointRate',
 #                                         '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-# 
-# 
+
 
 
 

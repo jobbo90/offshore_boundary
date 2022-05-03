@@ -63,7 +63,7 @@ source("./src/functions.R")
 # leaflet() %>%
 #   addProviderTiles("Esri.WorldImagery")
 exportFunction <- TRUE
-years <- seq(from = 1985, to = 2020, by = 1)
+years <- seq(from = 2021, to = 2021, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # pos to exlcude for mudbank boundary estimates / outlier detection
@@ -99,8 +99,8 @@ prefOrient <- 95                       # degrees, search angle
 # is this dependend on buffer size??
 smoothnessFactor <- 2
 
-aoi <- c('Suriname') #'FrenchGuiana', 'Suriname', 'Guyana'
-buffer <- paste0("buffer",c(500)) # c(100, 250, 500)
+aoi <- c('FrenchGuiana') #'FrenchGuiana', 'Suriname', 'Guyana'
+buffer <- paste0("buffer",c(100,250)) # c(100, 250, 500)
 
 # select folders
 dataFolder <- './data/raw/GEE_exports/coastline_morphology'
@@ -195,7 +195,7 @@ for (buf in buffer){
     filter(as.numeric(transectBuffer) == as.numeric(gsub("buffer", "", buf)))
   
   for(nr in 1:nrow(subset)){
-    nr <- 1401 # which(subset$dist != 	-1) & subset$date == as.Date("2019-06-01 UTC"))
+    # nr <- 1401 # which(subset$dist != 	-1) & subset$date == as.Date("2019-06-01 UTC"))
     # examples: 
     # POS 282000 DATE 2006 ==> complex shape
     # POS 0 DATE 2006 ==> Orientation flipped due to coastline bearing (norht-south)
@@ -684,7 +684,7 @@ annualTableWide <- annualTable %>% #
 
 if(exportFunction){
   
-  for (buf in buffer){
+  # for (buf in buffer){
   uniqueDates <- unique(annualTableWide$year_col)
   
     for (year in unique(format(as.Date(uniqueDates), '%Y'))){
@@ -695,17 +695,21 @@ if(exportFunction){
       
       per_year <-subset(annualTableWide,
                         as.Date(date) >= start_year &
-                          as.Date(date) <= end_year & transectBuffer == buf)
+                          as.Date(date) <= end_year )
+                        # & transectBuffer == buf)
       
       # df <- as.data.frame(do.call(cbind ,per_year))
+      # write_csv(per_year, 
+                # paste0(wd,"/data/processed/coastlines/", aoi,
+                       # '_', year,'_' ,buf, '_coastlineMorphology.csv'))
       write_csv(per_year, 
                 paste0(wd,"/data/processed/coastlines/", aoi,
-                       '_', year, '_coastlineMorphology_',buf, '.csv'))
+                       '_', year, '_coastlineMorphology.csv'))
       
       print( paste0(wd,"/data/processed/coastlines/", aoi,
-                    '_', year, '_coastlineMorphology_',buf, '.csv'))
+                    '_', year, '_coastlineMorphology.csv'))
       remove(per_year,start_year, end_year)}
-  }
+  # }
 }
 
 #################################
@@ -715,13 +719,14 @@ if(exportFunction){
 #################################
 
 # if exists read the processed coastline morphology data and merge with original
-
 coastlinesFolder <- './data/processed/coastlines'
 folderSelect <- as.matrix(list.files(paste0(coastlinesFolder), 
                                      full.names = T))
 df <- rewrite(folderSelect);
 # only csv's
 df <- df[grep('coastlineMorphology.csv', folderSelect, ignore.case = T),]
+years <- seq(from = 1985, to = 2021, by = 1)
+
 filtered <- vector('list', 100)
 for (q in seq_along(years)) {
   for (x in seq_along(aoi)){
@@ -755,48 +760,38 @@ morphologyObs <- do.call(bind_rows, lapply(as.matrix(filtered)[,1],
 morphologyObs <- type_convert(morphologyObs)
 
 
-# now for the 500m buffer (different naming)
-df <- rewrite(folderSelect);
-# only csv's
-df <- df[grep('500.csv', folderSelect, ignore.case = T),]
-filtered <- vector('list', 100)
-for (q in seq_along(years)) {
-  for (x in seq_along(aoi)){
-    year = years[q]
-    region = aoi[x]
-    
-    filtered = rbind(filtered, df %>% 
-                       dplyr::filter(
-                         filters %>%
-                           # apply the filter of all the text rows for each pattern
-                           # you'll get one list of logical by pattern ignored_string
-                           purrr::map(~ to_keep(.x, text = text)) %>%
-                           # get a logical vector of rows to keep
-                           purrr::pmap_lgl(all)
-                       ))
-  }
-  # q <- 1
-  
-}
-
-# # bind_rows!!
-morphologyObs500 <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], 
-                                           function(x) read.csv(x, 
-                                                                stringsAsFactors = FALSE,
-                                                                sep = ',', na.strings=c("","NA"),
-                                                                colClasses = "character")))
-
-morphologyObs500 <- type_convert(morphologyObs)
-
-
-
-
-
-
-
-
-
-
+# # now for the 500m buffer (different naming)
+# df <- rewrite(folderSelect);
+# # only csv's
+# df <- df[grep('500.csv', folderSelect, ignore.case = T),]
+# filtered <- vector('list', 100)
+# for (q in seq_along(years)) {
+#   for (x in seq_along(aoi)){
+#     year = years[q]
+#     region = aoi[x]
+#     
+#     filtered = rbind(filtered, df %>% 
+#                        dplyr::filter(
+#                          filters %>%
+#                            # apply the filter of all the text rows for each pattern
+#                            # you'll get one list of logical by pattern ignored_string
+#                            purrr::map(~ to_keep(.x, text = text)) %>%
+#                            # get a logical vector of rows to keep
+#                            purrr::pmap_lgl(all)
+#                        ))
+#   }
+#   # q <- 1
+#   
+# }
+# 
+# # # bind_rows!!
+# morphologyObs500 <- do.call(bind_rows, lapply(as.matrix(filtered)[,1], 
+#                                            function(x) read.csv(x, 
+#                                                                 stringsAsFactors = FALSE,
+#                                                                 sep = ',', na.strings=c("","NA"),
+#                                                                 colClasses = "character")))
+# 
+# morphologyObs500 <- type_convert(morphologyObs)
 
 # JOIN COASTLINE MORPHOLOGY OBSERVATIONS WITH COASTLINE CHANGES
 # select folders
@@ -852,14 +847,17 @@ allObs <- type_convert(allObs)
 
 # go to 1 observation per transect pos per year
 allObs_annual <- allObs %>%
-  dplyr::group_by(Country,year_col, pos) %>% # quarterly_col
+  # filter(mudbank_outlier == 0) %>%   # outliers
+  # filter(axisDist != -1)    %>%         # nonsens observations
+  dplyr::group_by(Country,year_col, pos) %>% 
+  # dplyr::distinct(deltaCoast, .keep_all = T) %>%
   dplyr::summarize(bearing = bearing[1],
                    coast_median = median(coast_median,na.rm=T),
                    deltaCoast= deltaCoast[1],
-                   # mudbank_extent = mudbank_extent [1], # 
-                   # axisDist = axisDist[1],              # 
+                   # mudbank_extent = mudbank_extent [1], #
+                   # axisDist = axisDist[1],              #
                    meanFraction = meanFraction[1],      # mean SmoothedPeakFract per position per year
-                   mean_smoothedMeanFract = mean(SmoothedPeakFract[SmoothedPeakFract>0], 
+                   mean_smoothedMeanFract = mean(SmoothedPeakFract[SmoothedPeakFract>0],
                                                  na.rm = T), # this one might be a bit different.
                    medianOffshore = medianOffshore[1], # median distance mudbank boundary from transect source
                    distX = distX[1], # x corresponding to median offshore dist
@@ -872,18 +870,18 @@ allObs_annual <- allObs %>%
 
 
 # reformat ROI value  to match the coastline ROI names
-annualTableWide$roi <- gsub(' ', '', annualTableWide$roi)
+morphologyObs$roi <- gsub(' ', '', morphologyObs$roi)
 
 # Join with the original dates
 df_join <- allObs_annual %>%
-  filter(year_col %in% unique(annualTableWide$year_col) &
-           pos %in% unique(annualTableWide$pos) ) %>% # make sure only join is performed on years where there is data
-  left_join(annualTableWide, 
+  filter(year_col %in% unique(morphologyObs$year_col) &
+           pos %in% unique(morphologyObs$pos) ) %>% # make sure only join is performed on years where there is data
+  left_join(morphologyObs, 
             c("year_col" = "year_col",
               "Country" = "roi",
-              "pos" = "pos"), keep = T
+              "pos" = "pos"), keep = T, suffix = c("", ".y")
   ) %>%
-  dplyr::select(year_col.x,  Country,pos.x,
+  dplyr::select(year_col, Country, pos,
                 # transect details
                 bearing,  
                 # originX, originY, seasons, five_year_col,collectiontype,
@@ -894,7 +892,7 @@ df_join <- allObs_annual %>%
                 # coastX, coastY,slope, locf,
                 
                 # mudbank details
-                mudbank_extent, axisDist, medianOffshore, meanFraction, 
+                medianOffshore, meanFraction, 
                 mean_smoothedMeanFract, distX, distY,noMudbank, 
                 mudbankObs,validMudbankObs,
                 
@@ -913,7 +911,7 @@ df_join <- allObs_annual %>%
 
 if(exportFunction){
   
-  uniqueDates2 <- unique(df_join$year_col.x)
+  uniqueDates2 <- unique(df_join$year_col)
   
   for (year in unique(format(as.Date(uniqueDates2), '%Y'))){
     # year <- unique(format(as.Date(uniqueDates2), '%Y'))[1]
@@ -922,8 +920,8 @@ if(exportFunction){
     end_year <- as.Date(ISOdate(year, 12, 31)) 
     
     per_year <-subset(df_join,
-                      as.Date(year_col.x) >= start_year &
-                        as.Date(year_col.x) <= end_year)
+                      as.Date(year_col) >= start_year &
+                        as.Date(year_col) <= end_year)
     
     # check if export is correct? Seems to go wrong when there is
     # two buffer widths included in the annualTableWide
@@ -933,7 +931,7 @@ if(exportFunction){
                      '_', year, '_coastline_mudbanks.csv'))
     
     print( paste0(wd,"/data/processed/coastlines/", aoi,
-                  '_', year, '_coastlines.csv'))
+                  '_', year, '_coastlines_mudbanks.csv'))
     remove(per_year, start_year, end_year)
   }
 }
