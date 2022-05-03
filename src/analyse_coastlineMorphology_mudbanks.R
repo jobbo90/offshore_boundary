@@ -207,7 +207,6 @@ allFiles_refDate <- allFiles_dropPOS %>%
                 normalized2 = coast_median - baseline2) %>%
   ungroup()
 
-  
 
 #################################
 #' 
@@ -273,70 +272,7 @@ allFiles_mutate <- allFiles_refDate %>%
                         alongshore)
   )
 
-countryOI <- aoi[1]# c('Suriname')
-grouping <- c('Country')
-propertyToPlot <- c('centeredOrientation_250')  # 'meanCurvature_250' 'sinuositySmoothed_100', 'centeredOrientation_100', 'centeredOrientation2_100'
-colnames(allFiles_mutate)
 
-# hist(allFiles_mutate$sinuositySmoothed_100)
-
-# calculate means
-meansOI <- allFiles_mutate %>%
-  # filter(Country == countryOI) %>%
-  dplyr::group_by(eval(as.name(paste(grouping)))) %>%
-  dplyr::summarize(mean=mean(eval(as.name(paste(propertyToPlot))), na.rm = T)) %>%
-  ungroup() %>%
-  rename_at(1, ~grouping)
-
-range <- round(quantile(allFiles_dropPOS[[propertyToPlot]],c(0.01, 0.99), na.rm=T))
-
-# overallMean <- mean(subsetVariability$normalized, na.rm = T)
-overallMean <- allFiles_mutate %>%
-  filter(Country == countryOI) %>%
-  group_by(eval(as.name(paste(grouping)))) %>%
-  dplyr::summarize(mean=mean(eval(as.name(paste(propertyToPlot))), na.rm = T)) %>%
-  rename_at(1, ~grouping)
-
-variability <- ggplot(data = allFiles_mutate, #%>% filter(Country == countryOI),
-                      alpha = 1,
-       aes(x=eval(as.name(paste(propertyToPlot))), 
-           fill = eval(as.name(paste(grouping))))) +
-  facet_wrap(~Country, ncol = 1, nrow = nrow(meansOI)) +
-  scale_y_log10(expand = c(0,0), name = 'log(obs. count)')+
-  # geom_vline(data = meansOI, aes(xintercept= mean), size = 3.5, colour = 'black',
-             # linetype="solid") +
-  # geom_vline(data = meansOI, aes(xintercept= mean, color=eval(as.name(paste(grouping)))), size = 2,
-             # linetype="solid") +
-  # geom_vline(data = overallMean, aes(xintercept= mean),color = 'Black', size = 2,
-             # linetype="dashed") +
-  geom_histogram(position = 'identity', bins = 75, alpha = 0.8) +
-
-  # 
-  # scale_x_continuous(breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
-  #                    limits = c(range[[1]],range[[2]])) +
-  # guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
-                              # linetype = 0)),
-         # colour = F) +
-  labs(y = 'count', x = paste0(propertyToPlot)) +
-  
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 20, face = 'bold'),
-        axis.title.x = element_text(size = 20, face = 'bold'),
-        axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
-        legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.position = c(0.9,0.8),
-        legend.text = element_text(size = 20),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        strip.text.x = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9'))
-
-variability
 
 
 # define bins for coastline changes
@@ -397,267 +333,7 @@ allFiles_mutate <- allFiles_mutate %>%
                 posneg250 = ifelse(mean250<0, 'negative', 'positive'))
   # dplyr::select(Country, year_col,pos, x_bins100,x_bins250,
                 # centeredOrientation_100, centeredOrientation_250) 
-# to compare the effect of different buffersizes go from a wide format to long
-# probably use a dplyr function here to ensure you only do that for a specific variable that we define.
-propertyToCompare <- c('medianC') # 'meanCurvature' 'sinuositySmoothed' 'x_bins' 'coastlineLengthOrdered'
-# 'coastlineLength' 'centeredOrientation' 'centeredOrientation2' 'bearing' 
-# 'medianC' 'maxC' 'minC' 'meanCurvature'
 
-
-
-# testVals = allFiles_mutate %>%
-#   filter(centeredOrientation_250 > 22.5 & centeredOrientation_250 < 67.5) %>%
-#   # filter(x_bins_250 == 7) %>%
-#   dplyr::select(Country, year_col,pos, x_bins_250,centeredOrientation_250)
-
-quantile(allFiles_mutate$meanCurvature_100,c(0.01, 0.99), na.rm=T)
-
-
-allfiles_long <- allFiles_mutate %>%
-  filter(!is.na(meanCurvature_250)& 
-           meanCurvature_250 != -1.0 & 
-           meanCurvature_250 != 0.0 ) %>%  # ==> which to filter!?
-  group_by(Country, pos, year_col) %>%
-  dplyr::select(matches(propertyToCompare), noMudbank) %>%
-  ungroup() %>%
-  pivot_longer(!c(Country, pos, year_col, noMudbank), 
-               names_to = c(propertyToCompare, 'transectBuffer'), 
-               values_to = c("value"), names_sep = '_') %>%
-  ungroup() 
-
-
-meansPerbuffer <- allfiles_long %>%
-  # filter(Country == countryOI) %>%
-  # filter(value < 0.003 & value > -0.003) %>%
-  filter(transectBuffer == 250) %>%
-  filter(as.numeric(value) != 0) %>%
-  dplyr::group_by(Country, as.factor(noMudbank)) %>%
-  dplyr::summarize(mean=mean(value, na.rm = T),
-                   sdev = sd(value, na.rm = T),
-                   median= median(value, na.rm = T),
-                   
-                   n=n()) %>%
-  ungroup() 
-
-# Variability/distribution occurence of the selected properties. 
-variability <- ggplot(data = allfiles_long %>% filter(transectBuffer == 250)
-                , aes(x=value, fill = as.factor(noMudbank)),  # fill = as.factor(noMudbank)
-                alpha = 1) +
-  # scale_y_log10(expand = c(0,0), name = 'log(obs. count)')+
-  facet_wrap(paste0('~Country'), ncol = 1, nrow = 3) +
-  
-  geom_histogram(binwidth = 0.0005, alpha = 0.8) +
-  # geom_histogram(binwidth = 0.0005) + 
-  # geom_histogram(binwidth = 0.00005*10^2.1, position = 'identity') +
-  # geom_density( alpha = 0.5) +
-  geom_vline(data = meansPerbuffer, aes(xintercept= median),color = 'Black', size = 2,
-             linetype="dashed") +
-  
-  # guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
-  #                                                linetype = 0),
-  #                            title="buffersize [m]"),colour = F) +
-  # labs(y = 'count', x = paste0(propertyToCompare)) +
-  labs(y = 'Observations [n]', x = 'curvature κ [deg*m-1]') + # 'curvature κ [deg*m-1]' , 'Coastline orientation (°)'
-  scale_x_continuous(limits = c(-0.004,0.004)) +
-  # scale_x_continuous(limits = c(-67.5,180),
-  #   breaks = c(seq(from = -67.5, to = -1,by = stepsize),
-  #               seq(from = 0, to = 180,by = stepsize)),
-  #                    expand = c(0,0)) +
-
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 20, face = 'bold'),
-        axis.title.x = element_text(size = 20, face = 'bold'),
-        axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
-        legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.position = c(0.9,0.8),
-        legend.text = element_text(size = 20),
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(), 
-        panel.background = element_blank(),
-        strip.text.x =element_text(size = 20, face = 'bold'),
-        plot.background = element_rect(fill = '#d9d9d9'))
-
-variability
-
-# ggsave(variability, filename = paste0("./results/temp_maps/",propertyToCompare,
-#                                              '_Guianas_1985-2020',
-#                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-
-#Hovmoller plot for the spatio temporal distribytion of coastline property
-p <-ggplot(allfiles_long %>% 
-             filter(transectBuffer == 250), 
-           aes(x =pos,y = as.Date(year_col), fill=value)) + 
-  
-  geom_tile(size=0.1, na.rm = TRUE) +
-  facet_wrap(paste0('~Country'), ncol = 1, nrow = 3) + 
-  # facet_wrap(~transectBuffer) +
-  
-  scale_fill_gradientn(name = 'Curvature',
-                       colours = c('#7b3294', '#f7f7f7', "#008837"),
-                       guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-                                               draw.llim = FALSE),
-                       oob=squish,
-                       values = scales::rescale(c(-0.2 ,-0.02,0,0.02, 0.2))) +
-  # scale_fill_gradientn(name = 'Shore normal',
-  #                    colours = c('#7b3294', '#f7f7f7', "#008837"),
-  #                    guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
-  #                                            draw.llim = FALSE),
-  #                    oob=squish,
-  #                    limits = c(-22.5,45),
-  #                    values = scales::rescale(c(-22.5 ,0,11.75,22.5, 45))) +
-  
-  labs(y = 'Year', x = 'Alongshore Position [km]') +
-  
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_text(size = 12, face = 'bold'),
-        axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-p
-
-# plot coastline position (normalized for given year and compare to curvature)
-
-temporalSubset <- allFiles_mutate %>% filter(year_col == as.Date('2016-01-01') &
-                                             Country == 'Suriname')
-temporalSubset2 <- allFiles_mutate %>% filter(year_col == as.Date('2020-01-01') &
-                                               Country == 'Suriname')
-
-# spline interpolation
-# spline_int <- as.data.frame(spline(temporalSubset$pos, 
-                                   # temporalSubset$meanCurvature_250))
-
-# add geom_rect with mudbanks
-planviewPos <- ggplot(data=temporalSubset, mapping = aes(x=pos,y = normalized2)) +
-  geom_point(alpha = 0.5) +
-  # geom_line(data = spline_int, aes(x = x, y = y))
-  stat_smooth(method = "lm",
-              formula = y ~ poly(x, 25), se = FALSE) +
-  labs(y = 'Cross-shore \n position [m]') +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-
-
-
-planviewCurv <- ggplot(data=temporalSubset, mapping = aes(x=pos,y = meanCurvature_250)) +
-  # geom_point(alpha = 0.5) +
- stat_smooth(method = "glm",
-              formula = y ~ poly(x, 25), se = FALSE) +
-  stat_smooth(data=temporalSubset2, color = 'red', method = "glm",
-              formula = y ~ poly(x, 25), se = FALSE,
-             mapping = aes(x=pos,y = meanCurvature_250)) +
-  scale_y_continuous(limits = c(-0.002,0.002), breaks = c(-0.002,0,0.002)) +
-  labs(y = 'curvature') +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-
-differencePos <- ggplot(data=temporalSubset, mapping = 
-                           aes(x=pos,
-                         y = temporalSubset2$normalized2-temporalSubset$normalized2)) +
-  geom_point(alpha = 0.5) +
-  scale_y_continuous(limits = c(-1000,1000), breaks = c(-1000,0,1000)) +
-  labs(y = 'Change \n position [m]') +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_text(size = 12, face = 'bold'),
-        axis.text.x = element_text(size = 12, hjust = .5, vjust = .5),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-
-differenceCurv <- ggplot(data=temporalSubset, mapping = 
-                           aes(x=pos,
-              y = temporalSubset2$meanCurvature_250-temporalSubset$meanCurvature_250)) +
-  geom_point(alpha = 0.5, ) +
-  labs(y = 'change curvature') +
-  scale_y_continuous(limits = c(-0.005,0.005), breaks = c(-0.005,0,0.005)) +
-  theme(axis.line.x = element_line(size = 0.5, colour = "black"),
-        axis.line.y = element_line(size = 0.5, colour = "black"),
-        axis.line = element_line(size= 1, colour = "black"),
-        axis.title.y = element_text(size = 12, face = 'bold'),
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
-        legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-        legend.title = element_text(colour = 'black', size = 14, face = "bold"),
-        # legend.key = element_rect(fill = NA),
-        legend.text = element_text(size = 12),
-        # legend.position = 'none',
-        panel.grid.major = element_blank(), # remove grid lines
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-
-plot_grid(planviewPos, planviewCurv,differenceCurv,differencePos, ncol = 1, align = 'v', #, mapped
-          nrow = 4, rel_heights = c(2.5, 2.5, 2.5, 2.5),         # adjust lay out 
-          labels = c('A', 'B', 'C', 'D'), vjust = 1, hjust =-7.2) 
-#vjust =c(+4, -1,-1), # adjust label position
-# hjust = -2)
-# ggsave(filename = paste0("./results/temp_maps/",
-#                                'coastlineMorphology_Suriname_2016_2020',
-#                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-
-
-
-
-
-
-# ggsave(p, filename = paste0("./results/temp_maps/hovmoller_Guianas_1985-2020_",
-#                             propertyToCompare ,'_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
 # # scatterplots
 # # coastlineBearing x coastline change
@@ -802,7 +478,7 @@ meansOI <- tempVar %>%
   # filter(Country == countryOI) %>%
   dplyr::group_by(Country) %>%
   dplyr::summarize(mean=mean(centeredOrientation2_250, na.rm = T)) %>%
-  ungroup() %>%
+  ungroup() #%>%
   rename_at(1, ~grouping)
 
 
@@ -898,82 +574,6 @@ combined <- dens1 +legend + plotTempVar + dens2 +
 
 # ggsave(combined, filename = paste0("./results/temp_maps/",
 #                                              'variabilityOrientation_Guianas_1985-2020',
-#                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
-#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
-
-# Alternative to the boxplots: create groups of pos (e.g. every 10 or per region)
-# and compute their average shore-normal angle for the x-axis and the distribution of
-# coastline responses (Wiggins et al., 2019 ==> Figure 9)
-
-# # aggregated pos gos per x Meters:
-# summarisePos <- 10000
-# breaks <- seq(0, max(allFiles_mutate$pos), summarisePos)
-# 
-# # position label for plotting x-axis
-# poslabel <- seq(0, max(allFiles_mutate$pos), 
-#                 summarisePos)
-# # noMudbank: when frequently identified as mudbank in a year: give 0
-# groupedBoxes <- allFiles_mutate %>%
-#   filter(!is.na(centeredOrientation2_250) & 
-#            # noMudbank == 1 & 
-#            deltaCoast < 250 & deltaCoast > -250) %>%
-#   group_by(Country) %>%
-#   dplyr::mutate(
-#     newPos = cut(pos,breaks, include.lowest = T, right = T)) %>%
-#   group_by(Country,newPos) %>%
-#   
-#   # probably change this because now the range of values is not suitable to take an average?
-#   dplyr::mutate(meanOrient = mean(centeredOrientation2_100, na.rm = T),
-#                 meanCurv = mean(medianC_250, na.rm = T),
-#                 meanChange = mean(deltaCoast, na.rm = T),
-#                 n = n()) %>%
-#   dplyr::select(Country,alongshore,pos,deltaCoast, meanOrient,newPos,
-#                 n, normalized2,meanCurv,meanChange)
-# 
-# 
-# plotGroupedBoxes <- ggplot(groupedBoxes, 
-#                 aes(x=round(meanOrient), color = as.factor(meanOrient),
-#                     fill = as.factor(Country), y = as.numeric(deltaCoast))) +
-#   scale_color_manual(values = rep(c("black"),223), guide = 'none') +
-#   geom_boxplot(outlier.shape=NA, ) + # aes(fill = as.factor(Country))
-#   # stat_smooth(data = groupedBoxes,  method = "glm", inherit.aes = F,
-#   #             mapping = aes(#linetype = Country,
-#   #                           fill = as.factor(Country),
-#   #                           x=round(meanOrient),
-#   #                           y = as.numeric(meanChange)),
-#   #             formula = y ~ poly(x, 5), se = FALSE) +
-# 
-# 
-#   # facet_wrap(~Country, ncol = 1, nrow = 3) +
-#   labs(y = 'Coastline change [m/yr]', x = 'Orientation [\u00B0]' ) +
-#   guides(fill=guide_legend(title=" "))  +
-#   theme(
-#     axis.line.x = element_line(size = 0.5, colour = "black"),
-#     axis.line.y = element_line(size = 0.5, colour = "black"),
-#     axis.line = element_line(size=1, colour = "black"),
-#     axis.text.x = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
-#     axis.text.y = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
-#     axis.title.y = element_text(size = 20, face = 'bold'),
-#     axis.title.x = element_text(size = 20, face = 'bold'),
-#     legend.position = c(.8, .8),
-#     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
-#     legend.key = element_rect(fill = NA),
-#     legend.text = element_text(size = 25),
-#     legend.title =  element_text(size = 25),
-#     panel.border = element_blank(),
-#     panel.grid.major = element_blank(),
-#     panel.grid.minor = element_blank(),
-#     panel.background = element_blank(),
-#     panel.spacing.x = unit(2, 'lines'),
-#     strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
-#     strip.text.x = element_text(size = 12, face = 'bold'), 
-#     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
-# 
-# 
-# plotGroupedBoxes
-
-# ggsave(plotGroupedBoxes, filename = paste0("./results/temp_maps/",
-#                                              'groupedOrientation_normalized2_Guianas_1985-2020',
 #                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
 
@@ -1294,6 +894,252 @@ spatialVariability
 ##' No figure in manuscript
 ##' Coastline resilience plot 
 ##' 
+# # to compare the effect of different buffersizes go from a wide format to long
+# # probably use a dplyr function here to ensure you only do that for a specific variable that we define.
+# propertyToCompare <- c('medianC') # 'meanCurvature' 'sinuositySmoothed' 'x_bins' 'coastlineLengthOrdered'
+# # 'coastlineLength' 'centeredOrientation' 'centeredOrientation2' 'bearing' 
+# # 'medianC' 'maxC' 'minC' 'meanCurvature'
+# 
+# 
+# 
+# # testVals = allFiles_mutate %>%
+# #   filter(centeredOrientation_250 > 22.5 & centeredOrientation_250 < 67.5) %>%
+# #   # filter(x_bins_250 == 7) %>%
+# #   dplyr::select(Country, year_col,pos, x_bins_250,centeredOrientation_250)
+# 
+# allfiles_long <- allFiles_mutate %>%
+#   filter(!is.na(meanCurvature_250)& 
+#            meanCurvature_250 != -1.0 & 
+#            meanCurvature_250 != 0.0 ) %>%  # ==> which to filter!?
+#   group_by(Country, pos, year_col) %>%
+#   dplyr::select(matches(propertyToCompare), noMudbank) %>%
+#   ungroup() %>%
+#   pivot_longer(!c(Country, pos, year_col, noMudbank), 
+#                names_to = c(propertyToCompare, 'transectBuffer'), 
+#                values_to = c("value"), names_sep = '_') %>%
+#   ungroup() 
+# 
+# 
+# meansPerbuffer <- allfiles_long %>%
+#   # filter(Country == countryOI) %>%
+#   # filter(value < 0.003 & value > -0.003) %>%
+#   filter(transectBuffer == 250) %>%
+#   filter(as.numeric(value) != 0) %>%
+#   dplyr::group_by(Country, as.factor(noMudbank)) %>%
+#   dplyr::summarize(mean=mean(value, na.rm = T),
+#                    sdev = sd(value, na.rm = T),
+#                    median= median(value, na.rm = T),
+#                    
+#                    n=n()) %>%
+#   ungroup() 
+# 
+# # Variability/distribution occurence of the selected properties. 
+# variability <- ggplot(data = allfiles_long %>% filter(transectBuffer == 250)
+#                       , aes(x=value, fill = as.factor(noMudbank)),  # fill = as.factor(noMudbank)
+#                       alpha = 1) +
+#   # scale_y_log10(expand = c(0,0), name = 'log(obs. count)')+
+#   facet_wrap(paste0('~Country'), ncol = 1, nrow = 3) +
+#   
+#   geom_histogram(binwidth = 0.0005, alpha = 0.8) +
+#   # geom_histogram(binwidth = 0.0005) + 
+#   # geom_histogram(binwidth = 0.00005*10^2.1, position = 'identity') +
+#   # geom_density( alpha = 0.5) +
+#   geom_vline(data = meansPerbuffer, aes(xintercept= median),color = 'Black', size = 2,
+#              linetype="dashed") +
+#   
+#   # guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
+#   #                                                linetype = 0),
+#   #                            title="buffersize [m]"),colour = F) +
+#   # labs(y = 'count', x = paste0(propertyToCompare)) +
+#   labs(y = 'Observations [n]', x = 'curvature κ [deg*m-1]') + # 'curvature κ [deg*m-1]' , 'Coastline orientation (°)'
+#   scale_x_continuous(limits = c(-0.004,0.004)) +
+#   # scale_x_continuous(limits = c(-67.5,180),
+#   #   breaks = c(seq(from = -67.5, to = -1,by = stepsize),
+#   #               seq(from = 0, to = 180,by = stepsize)),
+#   #                    expand = c(0,0)) +
+#   
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 20, face = 'bold'),
+#         axis.title.x = element_text(size = 20, face = 'bold'),
+#         axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
+#         legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.position = c(0.9,0.8),
+#         legend.text = element_text(size = 20),
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(), 
+#         panel.background = element_blank(),
+#         strip.text.x =element_text(size = 20, face = 'bold'),
+#         plot.background = element_rect(fill = '#d9d9d9'))
+# 
+# variability
+# 
+# # ggsave(variability, filename = paste0("./results/temp_maps/",propertyToCompare,
+# #                                              '_Guianas_1985-2020',
+# #                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+# #        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+# 
+
+
+# # plot coastline position (normalized for given year and compare to curvature)
+# temporalSubset <- allFiles_mutate %>% filter(year_col == as.Date('2016-01-01') &
+#                                                Country == 'Suriname')
+# temporalSubset2 <- allFiles_mutate %>% filter(year_col == as.Date('2020-01-01') &
+#                                                 Country == 'Suriname')
+# 
+# # spline interpolation
+# # spline_int <- as.data.frame(spline(temporalSubset$pos, 
+# # temporalSubset$meanCurvature_250))
+# 
+# # add geom_rect with mudbanks
+# planviewPos <- ggplot(data=temporalSubset, mapping = aes(x=pos,y = normalized2)) +
+#   geom_point(alpha = 0.5) +
+#   # geom_line(data = spline_int, aes(x = x, y = y))
+#   stat_smooth(method = "lm",
+#               formula = y ~ poly(x, 25), se = FALSE) +
+#   labs(y = 'Cross-shore \n position [m]') +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 12, face = 'bold'),
+#         axis.title.x = element_blank(),
+#         axis.text.x = element_blank(),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         # legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 12),
+#         # legend.position = 'none',
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# 
+# 
+# 
+# planviewCurv <- ggplot(data=temporalSubset, mapping = aes(x=pos,y = meanCurvature_250)) +
+#   # geom_point(alpha = 0.5) +
+#   stat_smooth(method = "glm",
+#               formula = y ~ poly(x, 25), se = FALSE) +
+#   stat_smooth(data=temporalSubset2, color = 'red', method = "glm",
+#               formula = y ~ poly(x, 25), se = FALSE,
+#               mapping = aes(x=pos,y = meanCurvature_250)) +
+#   scale_y_continuous(limits = c(-0.002,0.002), breaks = c(-0.002,0,0.002)) +
+#   labs(y = 'curvature') +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 12, face = 'bold'),
+#         axis.title.x = element_blank(),
+#         axis.text.x = element_blank(),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         # legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 12),
+#         # legend.position = 'none',
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# 
+# differencePos <- ggplot(data=temporalSubset, mapping = 
+#                           aes(x=pos,
+#                               y = temporalSubset2$normalized2-temporalSubset$normalized2)) +
+#   geom_point(alpha = 0.5) +
+#   scale_y_continuous(limits = c(-1000,1000), breaks = c(-1000,0,1000)) +
+#   labs(y = 'Change \n position [m]') +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 12, face = 'bold'),
+#         axis.title.x = element_text(size = 12, face = 'bold'),
+#         axis.text.x = element_text(size = 12, hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         # legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 12),
+#         # legend.position = 'none',
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# 
+# differenceCurv <- ggplot(data=temporalSubset, mapping = 
+#                            aes(x=pos,
+#                                y = temporalSubset2$meanCurvature_250-temporalSubset$meanCurvature_250)) +
+#   geom_point(alpha = 0.5, ) +
+#   labs(y = 'change curvature') +
+#   scale_y_continuous(limits = c(-0.005,0.005), breaks = c(-0.005,0,0.005)) +
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 12, face = 'bold'),
+#         axis.title.x = element_blank(),
+#         axis.text.x = element_blank(),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         # legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 12),
+#         # legend.position = 'none',
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# 
+# plot_grid(planviewPos, planviewCurv,differenceCurv,differencePos, ncol = 1, align = 'v', #, mapped
+#           nrow = 4, rel_heights = c(2.5, 2.5, 2.5, 2.5),         # adjust lay out 
+#           labels = c('A', 'B', 'C', 'D'), vjust = 1, hjust =-7.2) 
+
+
+# #Hovmoller plot for the spatio temporal distribytion of coastline property
+# p <-ggplot(allfiles_long %>% 
+#              filter(transectBuffer == 250), 
+#            aes(x =pos,y = as.Date(year_col), fill=value)) + 
+#   
+#   geom_tile(size=0.1, na.rm = TRUE) +
+#   facet_wrap(paste0('~Country'), ncol = 1, nrow = 3) + 
+#   # facet_wrap(~transectBuffer) +
+#   
+#   scale_fill_gradientn(name = 'Curvature',
+#                        colours = c('#7b3294', '#f7f7f7', "#008837"),
+#                        guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+#                                                draw.llim = FALSE),
+#                        oob=squish,
+#                        values = scales::rescale(c(-0.2 ,-0.02,0,0.02, 0.2))) +
+#   # scale_fill_gradientn(name = 'Shore normal',
+#   #                    colours = c('#7b3294', '#f7f7f7', "#008837"),
+#   #                    guide = guide_colourbar(nbin=100, draw.ulim = FALSE,
+#   #                                            draw.llim = FALSE),
+#   #                    oob=squish,
+#   #                    limits = c(-22.5,45),
+#   #                    values = scales::rescale(c(-22.5 ,0,11.75,22.5, 45))) +
+#   
+#   labs(y = 'Year', x = 'Alongshore Position [km]') +
+#   
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 12, face = 'bold'),
+#         axis.title.x = element_text(size = 12, face = 'bold'),
+#         axis.text.x = element_text(size = 12,  hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 12, hjust = .5, vjust = .5),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.title = element_text(colour = 'black', size = 14, face = "bold"),
+#         # legend.key = element_rect(fill = NA),
+#         legend.text = element_text(size = 12),
+#         # legend.position = 'none',
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# p
+
 
 # concGroup <- allFiles_sumChanges %>% 
 #   # dplyr::group_by(stability) %>% 
@@ -1445,6 +1291,157 @@ spatialVariability
 #                             'resilience_coastlines_medianconcavity250_meanOrient2','_',
 #                             format(Sys.Date(), "%Y%m%d"),'.jpeg'),
 # width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+# Alternative to the boxplots: create groups of pos (e.g. every 10 or per region)
+# and compute their average shore-normal angle for the x-axis and the distribution of
+# coastline responses (Wiggins et al., 2019 ==> Figure 9)
+
+# # aggregated pos gos per x Meters:
+# summarisePos <- 10000
+# breaks <- seq(0, max(allFiles_mutate$pos), summarisePos)
+# 
+# # position label for plotting x-axis
+# poslabel <- seq(0, max(allFiles_mutate$pos), 
+#                 summarisePos)
+# # noMudbank: when frequently identified as mudbank in a year: give 0
+# groupedBoxes <- allFiles_mutate %>%
+#   filter(!is.na(centeredOrientation2_250) & 
+#            # noMudbank == 1 & 
+#            deltaCoast < 250 & deltaCoast > -250) %>%
+#   group_by(Country) %>%
+#   dplyr::mutate(
+#     newPos = cut(pos,breaks, include.lowest = T, right = T)) %>%
+#   group_by(Country,newPos) %>%
+#   
+#   # probably change this because now the range of values is not suitable to take an average?
+#   dplyr::mutate(meanOrient = mean(centeredOrientation2_100, na.rm = T),
+#                 meanCurv = mean(medianC_250, na.rm = T),
+#                 meanChange = mean(deltaCoast, na.rm = T),
+#                 n = n()) %>%
+#   dplyr::select(Country,alongshore,pos,deltaCoast, meanOrient,newPos,
+#                 n, normalized2,meanCurv,meanChange)
+# 
+# 
+# plotGroupedBoxes <- ggplot(groupedBoxes, 
+#                 aes(x=round(meanOrient), color = as.factor(meanOrient),
+#                     fill = as.factor(Country), y = as.numeric(deltaCoast))) +
+#   scale_color_manual(values = rep(c("black"),223), guide = 'none') +
+#   geom_boxplot(outlier.shape=NA, ) + # aes(fill = as.factor(Country))
+#   # stat_smooth(data = groupedBoxes,  method = "glm", inherit.aes = F,
+#   #             mapping = aes(#linetype = Country,
+#   #                           fill = as.factor(Country),
+#   #                           x=round(meanOrient),
+#   #                           y = as.numeric(meanChange)),
+#   #             formula = y ~ poly(x, 5), se = FALSE) +
+# 
+# 
+#   # facet_wrap(~Country, ncol = 1, nrow = 3) +
+#   labs(y = 'Coastline change [m/yr]', x = 'Orientation [\u00B0]' ) +
+#   guides(fill=guide_legend(title=" "))  +
+#   theme(
+#     axis.line.x = element_line(size = 0.5, colour = "black"),
+#     axis.line.y = element_line(size = 0.5, colour = "black"),
+#     axis.line = element_line(size=1, colour = "black"),
+#     axis.text.x = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
+#     axis.text.y = element_text(color = "grey20", size = 18, hjust = .5, vjust = .5, face = "bold"),
+#     axis.title.y = element_text(size = 20, face = 'bold'),
+#     axis.title.x = element_text(size = 20, face = 'bold'),
+#     legend.position = c(.8, .8),
+#     legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#     legend.key = element_rect(fill = NA),
+#     legend.text = element_text(size = 25),
+#     legend.title =  element_text(size = 25),
+#     panel.border = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     panel.background = element_blank(),
+#     panel.spacing.x = unit(2, 'lines'),
+#     strip.background = element_rect(fill = "#d9d9d9", colour = "#d9d9d9"),
+#     strip.text.x = element_text(size = 12, face = 'bold'), 
+#     plot.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'))
+# 
+# 
+# plotGroupedBoxes
+
+# ggsave(plotGroupedBoxes, filename = paste0("./results/temp_maps/",
+#                                              'groupedOrientation_normalized2_Guianas_1985-2020',
+#                                              '_',  format(Sys.Date(), "%Y%m%d"),'.jpeg'),
+#        width = 13.1, height = 7.25, units = c('in'), dpi = 1200)
+
+
+
+
+##'
+##' Explore properties of coastline positions 
+##' No figure in manuscript
+##'
+
+# countryOI <- aoi[1]# c('Suriname')
+# grouping <- c('Country')
+# propertyToPlot <- c('centeredOrientation_250')  # 'meanCurvature_250' 'sinuositySmoothed_100', 'centeredOrientation_100', 'centeredOrientation2_100'
+# colnames(allFiles_mutate)
+# 
+# # hist(allFiles_mutate$sinuositySmoothed_100)
+# 
+# # calculate means
+# meansOI <- allFiles_mutate %>%
+#   # filter(Country == countryOI) %>%
+#   dplyr::group_by(eval(as.name(paste(grouping)))) %>%
+#   dplyr::summarize(mean=mean(eval(as.name(paste(propertyToPlot))), na.rm = T)) %>%
+#   ungroup() %>%
+#   rename_at(1, ~grouping)
+# 
+# range <- round(quantile(allFiles_dropPOS[[propertyToPlot]],c(0.01, 0.99), na.rm=T))
+# 
+# # overallMean <- mean(subsetVariability$normalized, na.rm = T)
+# overallMean <- allFiles_mutate %>%
+#   filter(Country == countryOI) %>%
+#   group_by(eval(as.name(paste(grouping)))) %>%
+#   dplyr::summarize(mean=mean(eval(as.name(paste(propertyToPlot))), na.rm = T)) %>%
+#   rename_at(1, ~grouping)
+# 
+# variability <- ggplot(data = allFiles_mutate, #%>% filter(Country == countryOI),
+#                       alpha = 1,
+#                       aes(x=eval(as.name(paste(propertyToPlot))), 
+#                           fill = eval(as.name(paste(grouping))))) +
+#   facet_wrap(~Country, ncol = 1, nrow = nrow(meansOI)) +
+#   scale_y_log10(expand = c(0,0), name = 'log(obs. count)')+
+#   # geom_vline(data = meansOI, aes(xintercept= mean), size = 3.5, colour = 'black',
+#   # linetype="solid") +
+#   # geom_vline(data = meansOI, aes(xintercept= mean, color=eval(as.name(paste(grouping)))), size = 2,
+#   # linetype="solid") +
+#   # geom_vline(data = overallMean, aes(xintercept= mean),color = 'Black', size = 2,
+#   # linetype="dashed") +
+#   geom_histogram(position = 'identity', bins = 75, alpha = 0.8) +
+#   
+#   # 
+#   # scale_x_continuous(breaks = c(range[[1]], range[[1]]/2, 0, range[[2]]/2, range[[2]]),
+#   #                    limits = c(range[[1]],range[[2]])) +
+#   # guides(fill = guide_legend(override.aes = list(size = 10, alpha =1,
+#   # linetype = 0)),
+#   # colour = F) +
+#   labs(y = 'count', x = paste0(propertyToPlot)) +
+#   
+#   theme(axis.line.x = element_line(size = 0.5, colour = "black"),
+#         axis.line.y = element_line(size = 0.5, colour = "black"),
+#         axis.line = element_line(size= 1, colour = "black"),
+#         axis.title.y = element_text(size = 20, face = 'bold'),
+#         axis.title.x = element_text(size = 20, face = 'bold'),
+#         axis.text.x = element_text(size = 18,  hjust = .5, vjust = .5),
+#         axis.text.y = element_text(size = 18, hjust = .5, vjust = .5),
+#         legend.title = element_blank(), #element_text(colour = 'black', size = 14, face = "bold"),
+#         legend.background = element_rect(fill = '#d9d9d9',  colour = '#d9d9d9'),
+#         legend.position = c(0.9,0.8),
+#         legend.text = element_text(size = 20),
+#         panel.grid.major = element_blank(), # remove grid lines
+#         panel.grid.minor = element_blank(), 
+#         panel.background = element_blank(),
+#         strip.text.x = element_blank(),
+#         plot.background = element_rect(fill = '#d9d9d9'))
+# 
+# variability
+
+
 
 # df5 <- allFiles_mutate %>%
 #   group_by(Country, x_bins_100) %>%
