@@ -63,7 +63,7 @@ source("./src/functions.R")
 # leaflet() %>%
 #   addProviderTiles("Esri.WorldImagery")
 exportFunction <- TRUE
-years <- seq(from = 2021, to = 2021, by = 1)
+years <- seq(from = 1999, to = 2005, by = 1)
 
 # near river mouths estimates for coastlines in old version of GEE script are 
 # pos to exlcude for mudbank boundary estimates / outlier detection
@@ -99,7 +99,7 @@ prefOrient <- 95                       # degrees, search angle
 # is this dependend on buffer size??
 smoothnessFactor <- 2
 
-aoi <- c('FrenchGuiana') #'FrenchGuiana', 'Suriname', 'Guyana'
+aoi <- c('Suriname') #'FrenchGuiana', 'Suriname', 'Guyana'
 buffer <- paste0("buffer",c(100,250)) # c(100, 250, 500)
 
 # select folders
@@ -145,7 +145,7 @@ allFiles <- do.call(bind_rows, lapply(as.matrix(filtered)[,1],
 # estimate (!) class for each column
 allFiles <- type_convert(allFiles)
 
-
+# subsetTest <- subset(allFiles, pos == 7000)
 
 # allFiles_dropPOS <- allFiles %>%
 #   dplyr::mutate(toFilter = 0) %>%
@@ -195,7 +195,7 @@ for (buf in buffer){
     filter(as.numeric(transectBuffer) == as.numeric(gsub("buffer", "", buf)))
   
   for(nr in 1:nrow(subset)){
-    # nr <- 1401 # which(subset$dist != 	-1) & subset$date == as.Date("2019-06-01 UTC"))
+    # nr <- 1898  # which(subset$pos == 7000)
     # examples: 
     # POS 282000 DATE 2006 ==> complex shape
     # POS 0 DATE 2006 ==> Orientation flipped due to coastline bearing (norht-south)

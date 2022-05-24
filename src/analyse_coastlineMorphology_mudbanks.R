@@ -461,7 +461,7 @@ boxplots
 tempVar <- allFiles_mutate %>%
 
   dplyr::group_by(Country, pos) %>%
-  dplyr::mutate(meanOrient = median(centeredOrientation2_250, na.rm = T),
+  dplyr::mutate(meanOrient = mean(centeredOrientation2_250, na.rm = T),
                 sdOrient = sd(centeredOrientation2_250, na.rm = T),
                 meanCurv = mean(meanCurvature_250, na.rm = T),
                 sdCurv = sd(meanCurvature_250, na.rm = T)) %>%
@@ -580,8 +580,8 @@ combined <- dens1 +legend + plotTempVar + dens2 +
 
 ###############################
 ##'
-##' Stability of coastline positions
-##' Figure 9: coastline stability
+##' resilience of coastline positions
+##' Figure 9: coastline resilience
 ##' 
 ##' 
 
@@ -658,6 +658,8 @@ allFiles_posMudbank <- allFiles_mutate %>%
                                      'NE', orientClass),
                 orientClass = ifelse(meanOrient<112.5 & meanOrient > 67.5,
                                      'E', orientClass))
+
+# writeOGR(allFiles_posMudbank, dsn = '.', layer = 'poly', driver = "ESRI Shapefile")
 
 allFiles_posMudbank <- transform(allFiles_posMudbank,
                                  Country=factor(Country, levels=c("FrenchGuiana","Suriname","Guyana")))

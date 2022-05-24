@@ -877,3 +877,42 @@ matrify = function(data){
   taxa
 }
 
+# check skewness: https://rpubs.com/marvinlemos/log-transformation
+
+mostSkewed <- function(mydataframe,colnumbers){
+  # mydataframe <- filterNA
+  # colnumbers <- varToIncludeNR
+  
+  
+  skewnesM <- matrix(data = NA, nrow = length(colnumbers), ncol = 1)
+  i<- 1
+  for (c in colnumbers){
+    # print(c)
+    # skewnesM[i,1] <- colnames(filterNA[,c])
+    # skewnesM[i,1] <- skewness(filterNA[,c])
+    skewnesM[i,1] <- EnvStats::skewness(unlist(filterNA[,c]), na.rm = T)
+    i<- i+1
+  }
+  row.names(skewnesM) <- colnames(filterNA[,colnumbers])
+  skewnesM <- as.data.frame(skewnesM)
+  # assign human-friendly names
+  names(skewnesM) <- c("skewness")
+  # sort and print the top n correlations
+  head(skewnesM[order(abs(skewnesM[,1]),decreasing=T),],n=length(colnumbers))
+  
+  # return(skewnesM[order(abs(skewnesM[,1]),decreasing=T),])
+  return(skewnesM)
+}
+logTransformNegatives <- function(x){
+  # x <- filterNA$deltaCoast
+  # x <- -1
+  # minX <-  min(filterNA$deltaCoast, na.rm = T)
+  
+  # log transform: larger than 0 
+  # logT<-sign(x)*log(abs(x))
+  
+  # ==> regular LOG produces NAN for negative values ==> scale to range starting at 0
+  # ==> what to do with log(0) ==? add a constant value
+  logT <- log(x - min(x, na.rm=T)+0.001)
+  return(logT)
+}
