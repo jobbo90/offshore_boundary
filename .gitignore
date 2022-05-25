@@ -57,6 +57,7 @@ __pycache__/
 
 # exclude data from source control by default
 /data/raw/GEE_exports/GIF/*
+/data/raw/ERA5_yearly/*
 #!/data/raw/GEE_exports/GIF/.gitkeep # ignoring of files in an ignored folder is not possible
 
 !/data/processed/coastlines/.gitignore
